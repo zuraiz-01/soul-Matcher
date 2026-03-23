@@ -23,8 +23,14 @@ class DiscoverCard extends StatelessWidget {
             Image.network(photo, fit: BoxFit.cover)
           else
             Container(
-              color: Colors.grey.shade300,
-              child: const Icon(Icons.person, size: 80),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: <Color>[Color(0xFF1B2333), Color(0xFF3A1F2F)],
+                ),
+              ),
+              child: const Icon(Icons.person, size: 80, color: Colors.white70),
             ),
           Container(
             decoration: const BoxDecoration(

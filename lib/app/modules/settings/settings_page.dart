@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:soul_matcher/app/modules/settings/settings_controller.dart';
+import 'package:soul_matcher/app/widgets/premium_background.dart';
 
 class SettingsPage extends GetView<SettingsController> {
   const SettingsPage({super.key});
@@ -8,55 +9,60 @@ class SettingsPage extends GetView<SettingsController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(title: const Text('Settings')),
-      body: Obx(
-        () => ListView(
-          padding: const EdgeInsets.all(16),
-          children: <Widget>[
-            Card(
-              child: Column(
-                children: <Widget>[
-                  ListTile(
-                    title: const Text('Theme'),
-                    subtitle: const Text('Light / Dark / System'),
-                    trailing: DropdownButton<ThemeMode>(
-                      value: controller.themeMode,
-                      onChanged: (ThemeMode? mode) {
-                        if (mode != null) controller.setThemeMode(mode);
-                      },
-                      items: const <DropdownMenuItem<ThemeMode>>[
-                        DropdownMenuItem<ThemeMode>(
-                          value: ThemeMode.system,
-                          child: Text('System'),
-                        ),
-                        DropdownMenuItem<ThemeMode>(
-                          value: ThemeMode.light,
-                          child: Text('Light'),
-                        ),
-                        DropdownMenuItem<ThemeMode>(
-                          value: ThemeMode.dark,
-                          child: Text('Dark'),
-                        ),
-                      ],
+      body: PremiumBackground(
+        child: Obx(
+          () => ListView(
+            padding: const EdgeInsets.fromLTRB(16, 100, 16, 20),
+            children: <Widget>[
+              PremiumGlassCard(
+                child: Column(
+                  children: <Widget>[
+                    ListTile(
+                      title: const Text('Theme'),
+                      subtitle: const Text('Light / Dark / System'),
+                      trailing: DropdownButton<ThemeMode>(
+                        value: controller.themeMode,
+                        onChanged: (ThemeMode? mode) {
+                          if (mode != null) controller.setThemeMode(mode);
+                        },
+                        items: const <DropdownMenuItem<ThemeMode>>[
+                          DropdownMenuItem<ThemeMode>(
+                            value: ThemeMode.system,
+                            child: Text('System'),
+                          ),
+                          DropdownMenuItem<ThemeMode>(
+                            value: ThemeMode.light,
+                            child: Text('Light'),
+                          ),
+                          DropdownMenuItem<ThemeMode>(
+                            value: ThemeMode.dark,
+                            child: Text('Dark'),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 14),
-            FilledButton(
-              onPressed: controller.isLoading.value ? null : controller.logout,
-              child: const Text('Logout'),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: controller.isLoading.value
-                  ? null
-                  : () => _showDeleteConfirmation(context),
-              icon: const Icon(Icons.delete_forever_outlined),
-              label: const Text('Delete Account'),
-            ),
-          ],
+              const SizedBox(height: 14),
+              FilledButton(
+                onPressed: controller.isLoading.value
+                    ? null
+                    : controller.logout,
+                child: const Text('Logout'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: controller.isLoading.value
+                    ? null
+                    : () => _showDeleteConfirmation(context),
+                icon: const Icon(Icons.delete_forever_outlined),
+                label: const Text('Delete Account'),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -32,11 +32,6 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
-**/Flutter/ephemeral/
-**/flutter/ephemeral/
-**/.plugin_symlinks/
-**/.gradle/
-**/.kotlin/
 
 # Symbolication related
 app.*.symbols

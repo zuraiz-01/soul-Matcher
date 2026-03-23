@@ -34,6 +34,7 @@ class MatchTile extends StatelessWidget {
           subtitle.isEmpty ? 'Say hi' : subtitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Color(0xCCFFFFFF)),
         ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,

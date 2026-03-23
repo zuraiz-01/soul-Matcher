@@ -1,31 +1,46 @@
-import 'package:firebase_core/firebase_core.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:soul_matcher/app/core/constants/app_constants.dart';
+import 'package:soul_matcher/app/core/constants/cloudinary_config.dart';
 import 'package:soul_matcher/app/data/models/app_user.dart';
+import 'package:soul_matcher/app/data/models/location_suggestion.dart';
 import 'package:soul_matcher/app/data/repositories/auth_repository.dart';
 import 'package:soul_matcher/app/data/repositories/user_repository.dart';
 import 'package:soul_matcher/app/routes/app_routes.dart';
+import 'package:soul_matcher/app/services/cloudinary_upload_service.dart';
+import 'package:soul_matcher/app/services/location_search_service.dart';
 
 class ProfileController extends GetxController {
-  // Disabled temporarily because Firebase Storage is not enabled on project plan.
-  static const bool photoUploadEnabled = false;
+  static bool get photoUploadEnabled => CloudinaryConfig.isConfigured;
 
   final AuthRepository _authRepository = Get.find<AuthRepository>();
   final UserRepository _userRepository = Get.find<UserRepository>();
+  final LocationSearchService _locationSearchService =
+      Get.find<LocationSearchService>();
   final ImagePicker _imagePicker = ImagePicker();
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController bioController = TextEditingController();
   final TextEditingController ageController = TextEditingController();
   final TextEditingController locationController = TextEditingController();
+  final FocusNode locationFocusNode = FocusNode();
 
   final RxnString selectedGender = RxnString();
   final RxnString selectedInterestedIn = RxnString();
   final RxList<String> photoUrls = <String>[].obs;
   final RxBool isLoading = false.obs;
   final RxBool isSaving = false.obs;
+  final RxList<LocationSuggestion> locationSuggestions =
+      <LocationSuggestion>[].obs;
+  final RxBool isLocationSearching = false.obs;
+  final RxBool showLocationSuggestions = false.obs;
+
+  final RxString _locationQuery = ''.obs;
+  Worker? _locationDebounceWorker;
+  int _locationRequestSequence = 0;
 
   late final bool isEditMode;
 
@@ -35,7 +50,26 @@ class ProfileController extends GetxController {
     isEditMode =
         Get.currentRoute == AppRoutes.profileEdit ||
         ((Get.arguments as Map<String, dynamic>?)?['isEdit'] == true);
+    _locationDebounceWorker = debounce<String>(
+      _locationQuery,
+      _searchLocationSuggestions,
+      time: const Duration(milliseconds: 420),
+    );
+    locationFocusNode.addListener(_handleLocationFocusChange);
     loadCurrentProfile();
+  }
+
+  void _handleLocationFocusChange() {
+    if (locationFocusNode.hasFocus) {
+      if (locationController.text.trim().length >= 3 &&
+          locationSuggestions.isNotEmpty) {
+        showLocationSuggestions.value = true;
+      }
+      return;
+    }
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      showLocationSuggestions.value = false;
+    });
   }
 
   Future<void> loadCurrentProfile() async {
@@ -52,16 +86,74 @@ class ProfileController extends GetxController {
       selectedGender.value = user.gender;
       selectedInterestedIn.value = user.interestedIn;
       photoUrls.assignAll(user.photos);
+      showLocationSuggestions.value = false;
+      locationSuggestions.clear();
     } finally {
       isLoading.value = false;
     }
+  }
+
+  void onLocationQueryChanged(String value) {
+    final String trimmedValue = value.trim();
+    _locationQuery.value = trimmedValue;
+
+    if (trimmedValue.length < 3) {
+      isLocationSearching.value = false;
+      showLocationSuggestions.value = false;
+      locationSuggestions.clear();
+      return;
+    }
+
+    showLocationSuggestions.value = true;
+  }
+
+  Future<void> _searchLocationSuggestions(String query) async {
+    if (query.length < 3) {
+      locationSuggestions.clear();
+      isLocationSearching.value = false;
+      showLocationSuggestions.value = false;
+      return;
+    }
+
+    final int requestId = ++_locationRequestSequence;
+    isLocationSearching.value = true;
+    try {
+      final List<LocationSuggestion> suggestions = await _locationSearchService
+          .searchAddresses(query);
+      if (requestId != _locationRequestSequence) {
+        return;
+      }
+      locationSuggestions.assignAll(suggestions);
+      showLocationSuggestions.value =
+          locationFocusNode.hasFocus && suggestions.isNotEmpty;
+    } catch (_) {
+      if (requestId != _locationRequestSequence) {
+        return;
+      }
+      locationSuggestions.clear();
+      showLocationSuggestions.value = false;
+    } finally {
+      if (requestId == _locationRequestSequence) {
+        isLocationSearching.value = false;
+      }
+    }
+  }
+
+  void pickLocationSuggestion(LocationSuggestion suggestion) {
+    locationController.text = suggestion.displayName;
+    locationController.selection = TextSelection.fromPosition(
+      TextPosition(offset: suggestion.displayName.length),
+    );
+    locationSuggestions.clear();
+    showLocationSuggestions.value = false;
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   Future<void> pickPhoto() async {
     if (!photoUploadEnabled) {
       Get.snackbar(
         'Photo upload disabled',
-        'Image upload temporarily band hai.',
+        'Cloudinary setup missing hai. Upload preset configure karo.',
       );
       return;
     }
@@ -84,10 +176,10 @@ class ProfileController extends GetxController {
         file: file,
       );
       photoUrls.add(url);
-    } on FirebaseException catch (e) {
+    } on CloudinaryUploadException catch (e) {
       Get.snackbar('Upload failed', _friendlyUploadError(e));
     } catch (e) {
-      Get.snackbar('Upload failed', e.toString());
+      Get.snackbar('Upload failed', _friendlyUploadError(e));
     } finally {
       isSaving.value = false;
     }
@@ -97,28 +189,32 @@ class ProfileController extends GetxController {
     photoUrls.remove(url);
   }
 
-  String _friendlyUploadError(FirebaseException e) {
-    final String code = e.code.toLowerCase();
-    final String message = (e.message ?? '').toLowerCase();
+  String _friendlyUploadError(Object error) {
+    final String message = error.toString().toLowerCase();
 
-    if (e.plugin == 'firebase_storage') {
-      if (code == 'no-default-bucket' ||
-          code == 'bucket-not-found' ||
-          message.contains('storage has not been set up')) {
-        return 'Firebase Storage setup pending hai. Firebase Console > Storage > Get Started karo.';
-      }
-      if (code == 'unauthorized') {
-        return 'Storage rules upload allow nahi kar rahi. Rules deploy/check karo.';
-      }
-      if (code == 'network-request-failed' || code == 'retry-limit-exceeded') {
-        return 'Network issue ki wajah se upload fail hua. Internet check karke retry karo.';
-      }
-      if (code == 'canceled') {
-        return 'Upload cancel ho gaya.';
-      }
+    if (message.contains('cloudinary config missing') ||
+        message.contains('upload preset')) {
+      return 'Cloudinary upload preset missing hai. Run with --dart-define=CLOUDINARY_UPLOAD_PRESET=<your_unsigned_preset>.';
+    }
+    if (message.contains('unsigned') ||
+        message.contains('preset') ||
+        message.contains('not found')) {
+      return 'Cloudinary unsigned upload preset invalid hai. Console > Settings > Upload me preset check karo.';
+    }
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('timeout')) {
+      return 'Network issue ki wajah se upload fail hua. Internet check karke retry karo.';
+    }
+    if (message.contains('file too large')) {
+      return 'Image size zyada hai. Thori choti image select karo.';
     }
 
-    return e.message ?? e.code;
+    if (error is CloudinaryUploadException && error.message.trim().isNotEmpty) {
+      return error.message.trim();
+    }
+
+    return error.toString();
   }
 
   Future<void> saveProfile() async {
@@ -175,10 +271,12 @@ class ProfileController extends GetxController {
 
   @override
   void onClose() {
+    _locationDebounceWorker?.dispose();
     nameController.dispose();
     bioController.dispose();
     ageController.dispose();
     locationController.dispose();
+    locationFocusNode.dispose();
     super.onClose();
   }
 }

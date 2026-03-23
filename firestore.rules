@@ -9,7 +9,7 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
-    function isParticipant(matchId) {
+    function isMatchParticipant(matchId) {
       return signedIn() &&
         request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.users;
     }
@@ -21,19 +21,27 @@ service cloud.firestore {
     }
 
     match /swipes/{uid}/actions/{targetUid} {
-      allow create, update, read, delete: if isOwner(uid);
+      // Owner can fully manage their swipe actions.
+      allow create, update, delete: if isOwner(uid);
+      // Owner can list/read all actions. Target user can read only their own action doc
+      // so mutual-like check works without exposing full swipe history.
+      allow list: if isOwner(uid);
+      allow get: if isOwner(uid) || (signedIn() && targetUid == request.auth.uid);
     }
 
     match /matches/{matchId} {
       allow create: if signedIn() &&
         request.resource.data.users is list &&
         request.auth.uid in request.resource.data.users;
-      allow read, update, delete: if isParticipant(matchId);
+      // Query-safe rule for matches collection reads.
+      allow read, update, delete: if signedIn() &&
+        resource.data.users is list &&
+        request.auth.uid in resource.data.users;
 
       match /messages/{messageId} {
-        allow create: if isParticipant(matchId) &&
+        allow create: if isMatchParticipant(matchId) &&
           request.resource.data.senderId == request.auth.uid;
-        allow read: if isParticipant(matchId);
+        allow read: if isMatchParticipant(matchId);
         allow update, delete: if false;
       }
     }

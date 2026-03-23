@@ -1,14 +1,15 @@
-import 'dart:typed_data';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:soul_matcher/app/data/models/app_user.dart';
+import 'package:soul_matcher/app/services/cloudinary_upload_service.dart';
 
 class UserRepository {
+  UserRepository({required CloudinaryUploadService cloudinaryUploadService})
+    : _cloudinaryUploadService = cloudinaryUploadService;
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final CloudinaryUploadService _cloudinaryUploadService;
 
   CollectionReference<Map<String, dynamic>> get _users =>
       _firestore.collection('users');
@@ -91,16 +92,11 @@ class UserRepository {
     required String uid,
     required XFile file,
   }) async {
-    final Uint8List bytes = await file.readAsBytes();
-    final Reference ref = _storage.ref(
-      'users/$uid/photos/${DateTime.now().millisecondsSinceEpoch}.jpg',
+    // Keep storage vendor-specific logic inside a dedicated service.
+    return _cloudinaryUploadService.uploadImage(
+      file: file,
+      folder: 'users/$uid/photos',
     );
-    final UploadTask uploadTask = ref.putData(
-      bytes,
-      SettableMetadata(contentType: 'image/jpeg'),
-    );
-    await uploadTask.whenComplete(() => null);
-    return ref.getDownloadURL();
   }
 
   Future<void> updateFcmToken({required String uid, required String token}) {

@@ -19,10 +19,24 @@ class AuthController extends GetxController {
 
   final RxBool isLoginMode = true.obs;
   final RxBool isLoading = false.obs;
+  final RxBool isPasswordObscured = true.obs;
+  final RxBool isConfirmPasswordObscured = true.obs;
   final RxnString verificationId = RxnString();
   final RxnInt resendToken = RxnInt();
 
-  void toggleMode() => isLoginMode.value = !isLoginMode.value;
+  void toggleMode() {
+    isLoginMode.value = !isLoginMode.value;
+    isPasswordObscured.value = true;
+    isConfirmPasswordObscured.value = true;
+  }
+
+  void togglePasswordVisibility() {
+    isPasswordObscured.value = !isPasswordObscured.value;
+  }
+
+  void toggleConfirmPasswordVisibility() {
+    isConfirmPasswordObscured.value = !isConfirmPasswordObscured.value;
+  }
 
   Future<void> submitEmailAuth() async {
     final String email = emailController.text.trim();

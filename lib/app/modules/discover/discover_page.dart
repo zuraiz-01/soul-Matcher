@@ -5,80 +5,86 @@ import 'package:soul_matcher/app/modules/discover/widgets/discover_card.dart';
 import 'package:soul_matcher/app/modules/discover/widgets/filter_bottom_sheet.dart';
 import 'package:soul_matcher/app/widgets/app_loader.dart';
 import 'package:soul_matcher/app/widgets/empty_state.dart';
+import 'package:soul_matcher/app/widgets/premium_background.dart';
 
 class DiscoverPage extends GetView<DiscoverController> {
   const DiscoverPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Obx(
-        () => Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      'Discover',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      showModalBottomSheet<void>(
-                        context: context,
-                        builder: (_) => FilterBottomSheet(
-                          initialFilter: controller.filter.value,
-                          onApply: controller.applyFilter,
+    return PremiumBackground(
+      child: SafeArea(
+        child: Obx(
+          () => Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Column(
+              children: <Widget>[
+                PremiumGlassCard(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          'Discover',
+                          style: Theme.of(context).textTheme.headlineSmall,
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.tune_rounded),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          showModalBottomSheet<void>(
+                            context: context,
+                            builder: (_) => FilterBottomSheet(
+                              initialFilter: controller.filter.value,
+                              onApply: controller.applyFilter,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.tune_rounded),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              TextField(
-                controller: controller.searchController,
-                onChanged: controller.onSearchChanged,
-                decoration: const InputDecoration(
-                  hintText: 'Search by name',
-                  prefixIcon: Icon(Icons.search),
                 ),
-              ),
-              const SizedBox(height: 14),
-              Expanded(child: _buildBody(context)),
-              const SizedBox(height: 10),
-              Obx(
-                () => Row(
+                const SizedBox(height: 10),
+                TextField(
+                  controller: controller.searchController,
+                  onChanged: controller.onSearchChanged,
+                  decoration: const InputDecoration(
+                    hintText: 'Search by name',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Expanded(child: _buildBody(context)),
+                const SizedBox(height: 10),
+                Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: <Widget>[
                     _ActionButton(
                       icon: Icons.close_rounded,
-                      color: Colors.grey.shade700,
+                      color: const Color(0xFF8E8E93),
                       onTap: controller.candidates.isEmpty
                           ? null
                           : controller.swipeLeft,
                     ),
                     _ActionButton(
                       icon: Icons.star_rounded,
-                      color: Colors.blue.shade400,
+                      color: const Color(0xFF5A7DFF),
                       onTap: controller.candidates.isEmpty
                           ? null
                           : controller.superLike,
                     ),
                     _ActionButton(
                       icon: Icons.favorite_rounded,
-                      color: Colors.pink.shade400,
+                      color: const Color(0xFFE55B79),
                       onTap: controller.candidates.isEmpty
                           ? null
                           : controller.swipeRight,
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
         ),
       ),
@@ -192,7 +198,8 @@ class _ActionButton extends StatelessWidget {
         height: 60,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: color.withValues(alpha: 0.12),
+          color: color.withValues(alpha: 0.16),
+          border: Border.all(color: Colors.white24),
         ),
         child: Icon(icon, color: color, size: 30),
       ),
