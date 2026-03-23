@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "174540205338",
+    "project_id": "soulmatcher-6222a",
+    "storage_bucket": "soulmatcher-6222a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:174540205338:android:adc2a9b68699ed936410a3",
+        "android_client_info": {
+          "package_name": "com.example.soul_matcher"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "174540205338-c37pv6u8q1ac1ujfn5og4a1u9l8r4iv4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.soul_matcher",
+            "certificate_hash": "0e5d0e1933752d6d1e76404194036e6f1e143062"
+          }
+        },
+        {
+          "client_id": "174540205338-11prcmudunn34jf4si16dki7u73surog.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAA1IbsVdiUvK8bCXwCN6xevzpGxyHkeh8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "174540205338-11prcmudunn34jf4si16dki7u73surog.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "174540205338-dqt12punhdae79gjhu3ggfp907hatq9q.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.soulMatcher"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

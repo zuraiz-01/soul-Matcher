@@ -1,0 +1,35 @@
+name: soul_matcher
+description: "SoulMatch dating app built with Flutter, GetX, and Firebase."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  get: ^4.7.2
+  firebase_core: ^3.13.0
+  firebase_auth: ^5.5.4
+  cloud_firestore: ^5.6.8
+  firebase_storage: ^12.4.8
+  firebase_messaging: ^15.2.8
+  google_sign_in: ^6.3.0
+  image_picker: ^1.1.2
+  video_player: ^2.9.5
+  intl: ^0.20.2
+  google_fonts: ^6.3.1
+  collection: ^1.19.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/videos/auth_bg.mp4
+    - assets/videos/auth_bg_fallback.gif
