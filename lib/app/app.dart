@@ -11,18 +11,17 @@ class SoulMatchApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GetX<ThemeController>(
-      builder: (themeController) => GetMaterialApp(
-        title: 'SoulMatch',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: themeController.themeMode.value,
-        initialBinding: InitialBinding(),
-        initialRoute: AppRoutes.splash,
-        getPages: AppPages.routes,
-        defaultTransition: Transition.cupertino,
-      ),
+    final ThemeController themeController = Get.find<ThemeController>();
+    return GetMaterialApp(
+      title: 'SoulMatch',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: themeController.themeMode.value,
+      initialBinding: InitialBinding(),
+      initialRoute: AppRoutes.splash,
+      getPages: AppPages.routes,
+      defaultTransition: Transition.cupertino,
     );
   }
 }

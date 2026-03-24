@@ -6,6 +6,7 @@ import 'package:soul_matcher/app/data/repositories/user_repository.dart';
 import 'package:soul_matcher/app/modules/splash/splash_controller.dart';
 import 'package:soul_matcher/app/services/cloudinary_upload_service.dart';
 import 'package:soul_matcher/app/services/firebase_notification_service.dart';
+import 'package:soul_matcher/app/services/openrouter_service.dart';
 import 'package:soul_matcher/app/theme/theme_controller.dart';
 
 class InitialBinding extends Bindings {
@@ -28,6 +29,7 @@ class InitialBinding extends Bindings {
     );
     Get.lazyPut<DiscoverRepository>(() => DiscoverRepository(), fenix: true);
     Get.lazyPut<ChatRepository>(() => ChatRepository(), fenix: true);
+    Get.lazyPut<OpenRouterService>(() => OpenRouterService(), fenix: true);
     Get.lazyPut<FirebaseNotificationService>(
       () => FirebaseNotificationService(
         userRepository: Get.find<UserRepository>(),

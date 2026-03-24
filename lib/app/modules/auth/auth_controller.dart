@@ -74,6 +74,15 @@ class AuthController extends GetxController {
       await _routeAfterAuth(credential.user!.uid);
     } on FirebaseAuthException catch (e) {
       Get.snackbar('Auth failed', _friendlyAuthMessage(e));
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        Get.snackbar(
+          'Signup failed',
+          'Firestore permission issue. Please deploy latest rules and try again.',
+        );
+      } else {
+        Get.snackbar('Auth failed', e.message ?? e.code);
+      }
     } catch (e) {
       Get.snackbar('Auth failed', e.toString());
     } finally {

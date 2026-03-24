@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:soul_matcher/app/data/models/swipe_action.dart';
 import 'package:soul_matcher/app/modules/discover/discover_controller.dart';
 import 'package:soul_matcher/app/modules/discover/widgets/discover_card.dart';
 import 'package:soul_matcher/app/modules/discover/widgets/filter_bottom_sheet.dart';
@@ -100,7 +101,7 @@ class DiscoverPage extends GetView<DiscoverController> {
         title: 'No more profiles',
         subtitle: 'Try adjusting filters or check back later.',
         actionLabel: 'Refresh',
-        onAction: controller.loadCandidates,
+        onAction: controller.refreshCandidates,
       );
     }
 
@@ -109,25 +110,27 @@ class DiscoverPage extends GetView<DiscoverController> {
       key: ValueKey<String>('discover_${user.uid}'),
       direction: DismissDirection.horizontal,
       onDismissed: (DismissDirection direction) {
-        if (direction == DismissDirection.startToEnd) {
-          controller.swipeRight();
-        } else {
-          controller.swipeLeft();
-        }
+        final SwipeType swipeType = direction == DismissDirection.startToEnd
+            ? SwipeType.like
+            : SwipeType.pass;
+        controller.dismissAndSwipe(target: user, type: swipeType);
       },
-      child: DiscoverCard(
-        user: user,
-        onMorePressed: () => _showMoreActionSheet(context),
+      child: GestureDetector(
+        onTap: () => controller.openProfile(user),
+        child: DiscoverCard(
+          user: user,
+          onMorePressed: () => _showMoreActionSheet(context),
+        ),
       ),
     );
   }
 
-  void _showMoreActionSheet(BuildContext context) {
-    showModalBottomSheet<void>(
+  Future<void> _showMoreActionSheet(BuildContext context) async {
+    final _SafetyAction? action = await showModalBottomSheet<_SafetyAction>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => SafeArea(
+      builder: (BuildContext modalContext) => SafeArea(
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -154,10 +157,8 @@ class DiscoverPage extends GetView<DiscoverController> {
                   iconColor: const Color(0xFFF6A23A),
                   title: 'Report user',
                   subtitle: 'Tell us why this profile looks suspicious',
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await _showReportBottomSheet(context);
-                  },
+                  onTap: () =>
+                      Navigator.of(modalContext).pop(_SafetyAction.report),
                 ),
                 const SizedBox(height: 8),
                 _SheetActionTile(
@@ -165,10 +166,8 @@ class DiscoverPage extends GetView<DiscoverController> {
                   iconColor: const Color(0xFFFF6B6B),
                   title: 'Block user',
                   subtitle: 'They will no longer appear in Discover',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    controller.blockCurrent();
-                  },
+                  onTap: () =>
+                      Navigator.of(modalContext).pop(_SafetyAction.block),
                 ),
               ],
             ),
@@ -176,127 +175,155 @@ class DiscoverPage extends GetView<DiscoverController> {
         ),
       ),
     );
+
+    if (action == null || !context.mounted) return;
+    if (action == _SafetyAction.report) {
+      await _showReportBottomSheet(context);
+      return;
+    }
+    if (action == _SafetyAction.block) {
+      await controller.blockCurrent();
+    }
   }
 
   Future<void> _showReportBottomSheet(BuildContext context) async {
-    final TextEditingController reasonController = TextEditingController();
-    const List<String> quickReasons = <String>[
-      'Fake profile',
-      'Spam behavior',
-      'Inappropriate content',
-      'Harassment',
-      'Scam attempt',
-    ];
-    String? selectedReason;
-
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (BuildContext modalContext) => StatefulBuilder(
-        builder: (BuildContext context, StateSetter setModalState) {
-          return SafeArea(
-            top: false,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                12,
-                0,
-                12,
-                MediaQuery.of(context).viewInsets.bottom + 12,
+      builder: (_) => _ReportBottomSheet(onSubmit: controller.reportCurrent),
+    );
+  }
+}
+
+enum _SafetyAction { report, block }
+
+class _ReportBottomSheet extends StatefulWidget {
+  const _ReportBottomSheet({required this.onSubmit});
+
+  final Future<void> Function(String reason) onSubmit;
+
+  @override
+  State<_ReportBottomSheet> createState() => _ReportBottomSheetState();
+}
+
+class _ReportBottomSheetState extends State<_ReportBottomSheet> {
+  static const List<String> _quickReasons = <String>[
+    'Fake profile',
+    'Spam behavior',
+    'Inappropriate content',
+    'Harassment',
+    'Scam attempt',
+  ];
+
+  final TextEditingController _reasonController = TextEditingController();
+  String? _selectedReason;
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final String reason = _reasonController.text.trim();
+    if (reason.isEmpty) {
+      Get.snackbar('Validation', 'Please add a reason before submitting.');
+      return;
+    }
+    Navigator.of(context).pop();
+    await widget.onSubmit(reason);
+  }
+
+  void _onReasonSelected(bool selected, String reason) {
+    setState(() {
+      _selectedReason = selected ? reason : null;
+      if (selected && _reasonController.text.trim().isEmpty) {
+        _reasonController.text = reason;
+        _reasonController.selection = TextSelection.fromPosition(
+          TextPosition(offset: _reasonController.text.length),
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          12,
+          0,
+          12,
+          MediaQuery.of(context).viewInsets.bottom + 12,
+        ),
+        child: _SheetCard(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const _BottomSheetHandle(),
+              Text(
+                'Report user',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-              child: _SheetCard(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    const _BottomSheetHandle(),
-                    Text(
-                      'Report user',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'This report is anonymous. Help us understand what happened.',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: Colors.white70),
-                    ),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: quickReasons.map((String reason) {
-                        final bool isSelected = selectedReason == reason;
-                        return ChoiceChip(
-                          label: Text(reason),
-                          selected: isSelected,
-                          onSelected: (bool selected) {
-                            setModalState(() {
-                              selectedReason = selected ? reason : null;
-                              if (selected &&
-                                  reasonController.text.trim().isEmpty) {
-                                reasonController.text = reason;
-                                reasonController.selection =
-                                    TextSelection.fromPosition(
-                                      TextPosition(
-                                        offset: reasonController.text.length,
-                                      ),
-                                    );
-                              }
-                            });
-                          },
-                        );
-                      }).toList(growable: false),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: reasonController,
-                      maxLines: 4,
-                      maxLength: 180,
-                      decoration: const InputDecoration(
-                        hintText: 'Write a short reason...',
-                        prefixIcon: Icon(Icons.edit_note_rounded),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.of(modalContext).pop(),
-                            child: const Text('Cancel'),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () async {
-                              final String reason = reasonController.text
-                                  .trim();
-                              if (reason.isEmpty) {
-                                Get.snackbar(
-                                  'Validation',
-                                  'Please add a reason before submitting.',
-                                );
-                                return;
-                              }
-                              Navigator.of(modalContext).pop();
-                              await controller.reportCurrent(reason);
-                            },
-                            child: const Text('Submit Report'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              const SizedBox(height: 6),
+              Text(
+                'This report is anonymous. Help us understand what happened.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _quickReasons
+                    .map((String reason) {
+                      final bool isSelected = _selectedReason == reason;
+                      return ChoiceChip(
+                        label: Text(reason),
+                        selected: isSelected,
+                        onSelected: (bool selected) =>
+                            _onReasonSelected(selected, reason),
+                      );
+                    })
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _reasonController,
+                maxLines: 4,
+                maxLength: 180,
+                decoration: const InputDecoration(
+                  hintText: 'Write a short reason...',
+                  prefixIcon: Icon(Icons.edit_note_rounded),
                 ),
               ),
-            ),
-          );
-        },
+              const SizedBox(height: 10),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _submit,
+                      child: const Text('Submit Report'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
-    reasonController.dispose();
   }
 }
 

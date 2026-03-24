@@ -59,10 +59,11 @@ class UserRepository {
   }
 
   Future<void> markOnboardingComplete(String uid) {
-    return _users.doc(uid).update(<String, dynamic>{
+    return _users.doc(uid).set(<String, dynamic>{
+      'uid': uid,
       'onboardingCompleted': true,
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    }, SetOptions(merge: true));
   }
 
   Future<void> updateProfile({

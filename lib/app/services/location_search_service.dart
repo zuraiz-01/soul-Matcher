@@ -13,21 +13,20 @@ class LocationSearchService {
       return const <LocationSuggestion>[];
     }
 
-    final Uri uri = Uri.https(
-      'nominatim.openstreetmap.org',
-      '/search',
-      <String, String>{
-        'q': trimmedQuery,
-        'format': 'jsonv2',
-        'addressdetails': '1',
-        'limit': '$limit',
-      },
-    );
+    final Uri uri =
+        Uri.https('nominatim.openstreetmap.org', '/search', <String, String>{
+          'q': trimmedQuery,
+          'format': 'jsonv2',
+          'accept-language': 'en',
+          'addressdetails': '1',
+          'limit': '$limit',
+        });
 
     final http.Response response = await http.get(
       uri,
       headers: const <String, String>{
         'Accept': 'application/json',
+        'Accept-Language': 'en',
         'User-Agent': 'SoulMatch/1.0 (Flutter)',
       },
     );

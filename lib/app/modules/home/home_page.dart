@@ -184,9 +184,8 @@ class _MeTab extends StatelessWidget {
                           children: <Widget>[
                             CircleAvatar(
                               radius: 46,
-                              backgroundColor: theme
-                                  .colorScheme
-                                  .surfaceContainerHighest,
+                              backgroundColor:
+                                  theme.colorScheme.surfaceContainerHighest,
                               child: _ProfileAvatarImage(user: user),
                             ),
                             const SizedBox(width: 12),
@@ -218,7 +217,10 @@ class _MeTab extends StatelessWidget {
                           spacing: 8,
                           runSpacing: 8,
                           children: metaItems
-                              .map((_ProfileMetaItem item) => _ProfileMetaChip(item: item))
+                              .map(
+                                (_ProfileMetaItem item) =>
+                                    _ProfileMetaChip(item: item),
+                              )
                               .toList(growable: false),
                         ),
                         if (user.bio.trim().isNotEmpty) ...<Widget>[
@@ -248,10 +250,27 @@ class _MeTab extends StatelessWidget {
                   const SizedBox(height: 14),
                   Row(
                     children: <Widget>[
-                      FilledButton.icon(
-                        onPressed: () => Get.toNamed(AppRoutes.profileEdit),
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Edit Profile'),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => Get.toNamed(AppRoutes.profileEdit),
+                          icon: const Icon(Icons.edit_outlined),
+                          label: const Text('Edit Profile'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            try {
+                              await authRepository.signOut();
+                              Get.offAllNamed(AppRoutes.auth);
+                            } catch (e) {
+                              Get.snackbar('Logout failed', e.toString());
+                            }
+                          },
+                          icon: const Icon(Icons.logout_rounded),
+                          label: const Text('Logout'),
+                        ),
                       ),
                     ],
                   ),
@@ -319,25 +338,37 @@ class _ProfileMetaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(item.icon, size: 14, color: Colors.white70),
-          const SizedBox(width: 6),
-          Text(
-            item.label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelMedium?.copyWith(color: Colors.white),
-          ),
-        ],
+    final double maxChipWidth = (MediaQuery.sizeOf(context).width - 120)
+        .clamp(140.0, 280.0)
+        .toDouble();
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxChipWidth),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(item.icon, size: 14, color: Colors.white70),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

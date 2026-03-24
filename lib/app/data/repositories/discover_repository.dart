@@ -50,9 +50,13 @@ class DiscoverRepository {
   Future<List<AppUser>> getCandidates({
     required AppUser currentUser,
     required DiscoverFilter filter,
+    bool includePreviouslySwiped = false,
   }) async {
-    final Set<String> swiped = await _getSwipedUserIds(currentUser.uid);
+    final Set<String> swiped = includePreviouslySwiped
+        ? <String>{}
+        : await _getSwipedUserIds(currentUser.uid);
     final Set<String> blocked = await _getBlockedUserIds(currentUser.uid);
+    final Set<String> reported = await _getReportedUserIds(currentUser.uid);
 
     List<AppUser> firestoreUsers = const <AppUser>[];
     try {
@@ -80,6 +84,7 @@ class DiscoverRepository {
           if (user.uid == currentUser.uid) return false;
           if (swiped.contains(user.uid)) return false;
           if (blocked.contains(user.uid)) return false;
+          if (reported.contains(user.uid)) return false;
           if (user.age == null) return false;
 
           final bool ageValid =
@@ -108,6 +113,15 @@ class DiscoverRepository {
         })
         .take(AppConstants.discoverBatchSize)
         .toList(growable: false);
+  }
+
+  AppUser? getDemoUserById(String uid) {
+    for (final AppUser user in _demoUsers) {
+      if (user.uid == uid) {
+        return user;
+      }
+    }
+    return null;
   }
 
   bool _isPotentiallyInterestedInMe({
@@ -144,29 +158,32 @@ class DiscoverRepository {
     if (cleaned == 'woman' || cleaned == 'female' || cleaned == 'girl') {
       return 'woman';
     }
-    if (cleaned == 'non-binary' ||
-        cleaned == 'nonbinary' ||
-        cleaned == 'nb') {
+    if (cleaned == 'non-binary' || cleaned == 'nonbinary' || cleaned == 'nb') {
       return 'non-binary';
     }
     return cleaned;
   }
 
   Future<void> swipe({required SwipeActionModel action}) {
-    return _swipeActions(action.byUserId).doc(action.targetUserId).set(
-      <String, dynamic>{
-          'byUserId': action.byUserId,
-          'targetUserId': action.targetUserId,
-          'action': action.firestoreValue,
-          'createdAt': FieldValue.serverTimestamp(),
-      },
-    );
+    return _swipeActions(
+      action.byUserId,
+    ).doc(action.targetUserId).set(<String, dynamic>{
+      'byUserId': action.byUserId,
+      'targetUserId': action.targetUserId,
+      'action': action.firestoreValue,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<bool> isMutualLike({
     required String myUid,
     required String targetUid,
   }) async {
+    if (_isDemoUserUid(targetUid)) {
+      // Demo profiles auto-like back to keep the app flow testable.
+      return true;
+    }
+
     final DocumentSnapshot<Map<String, dynamic>> reverseSwipe = await _firestore
         .collection('swipes')
         .doc(targetUid)
@@ -186,47 +203,40 @@ class DiscoverRepository {
     final DocumentReference<Map<String, dynamic>> matchRef = _matches.doc(
       matchId,
     );
-    final DocumentSnapshot<Map<String, dynamic>> existing = await matchRef
-        .get();
 
-    if (!existing.exists) {
-      await matchRef.set(<String, dynamic>{
-        'users': sorted,
-        'createdAt': FieldValue.serverTimestamp(),
-        'lastMessage': null,
-        'lastMessageAt': FieldValue.serverTimestamp(),
-        'unreadCount': <String, int>{uidA: 0, uidB: 0},
-      });
-    }
+    // Do not read before create: a non-existing doc can be denied by rules.
+    await matchRef.set(<String, dynamic>{
+      'users': sorted,
+      'createdAt': FieldValue.serverTimestamp(),
+      'unreadCount': <String, int>{uidA: 0, uidB: 0},
+    }, SetOptions(merge: true));
 
-    final DocumentSnapshot<Map<String, dynamic>> snapshot = await matchRef
-        .get();
-    return MatchModel.fromMap(
-      snapshot.data() ?? <String, dynamic>{},
-      snapshot.id,
+    return MatchModel(
+      id: matchId,
+      users: sorted,
+      unreadCount: <String, int>{uidA: 0, uidB: 0},
     );
   }
 
   Stream<List<MatchModel>> streamMatches(String uid) {
-    return _matches
-        .where('users', arrayContains: uid)
-        .snapshots()
-        .map((QuerySnapshot<Map<String, dynamic>> query) {
-          final List<MatchModel> matches = query.docs.map((
-            QueryDocumentSnapshot<Map<String, dynamic>> doc,
-          ) {
-            return MatchModel.fromMap(doc.data(), doc.id);
-          }).toList();
+    return _matches.where('users', arrayContains: uid).snapshots().map((
+      QuerySnapshot<Map<String, dynamic>> query,
+    ) {
+      final List<MatchModel> matches = query.docs.map((
+        QueryDocumentSnapshot<Map<String, dynamic>> doc,
+      ) {
+        return MatchModel.fromMap(doc.data(), doc.id);
+      }).toList();
 
-          matches.sort((MatchModel a, MatchModel b) {
-            final DateTime aTime =
-                a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final DateTime bTime =
-                b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-            return bTime.compareTo(aTime);
-          });
-          return matches;
-        });
+      matches.sort((MatchModel a, MatchModel b) {
+        final DateTime aTime =
+            a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final DateTime bTime =
+            b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime);
+      });
+      return matches;
+    });
   }
 
   Future<void> reportUser({
@@ -242,6 +252,7 @@ class DiscoverRepository {
           'reason': trimmedReason,
           'createdAt': FieldValue.serverTimestamp(),
         },
+        'dismissedReportedUsers.$reportedUid': FieldValue.delete(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     }
@@ -266,6 +277,7 @@ class DiscoverRepository {
         'reason': trimmedReason,
         'createdAt': FieldValue.serverTimestamp(),
       },
+      'dismissedReportedUsers.$reportedUid': FieldValue.delete(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
     try {
@@ -283,12 +295,74 @@ class DiscoverRepository {
     required String myUid,
     required String targetUid,
   }) async {
-    await _blockedUsers(myUid).doc(targetUid).set(
-      <String, dynamic>{
-          'targetUid': targetUid,
-          'createdAt': FieldValue.serverTimestamp(),
-      },
+    await _blockedUsers(myUid).doc(targetUid).set(<String, dynamic>{
+      'targetUid': targetUid,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> removeSwipeAction({
+    required String myUid,
+    required String targetUid,
+  }) {
+    return _swipeActions(myUid).doc(targetUid).delete();
+  }
+
+  Future<bool> removeSwipeActionAndDeleteConversation({
+    required String myUid,
+    required String targetUid,
+  }) async {
+    await removeSwipeAction(myUid: myUid, targetUid: targetUid);
+    return deleteMatchAndMessages(uidA: myUid, uidB: targetUid);
+  }
+
+  Future<bool> deleteMatchAndMessages({
+    required String uidA,
+    required String uidB,
+  }) async {
+    final String matchId = _buildMatchId(uidA, uidB);
+    final DocumentReference<Map<String, dynamic>> matchRef = _matches.doc(
+      matchId,
     );
+
+    try {
+      while (true) {
+        final QuerySnapshot<Map<String, dynamic>> snapshot = await matchRef
+            .collection('messages')
+            .limit(200)
+            .get();
+        if (snapshot.docs.isEmpty) break;
+
+        final WriteBatch batch = _firestore.batch();
+        for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+            in snapshot.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      }
+
+      await matchRef.delete();
+      return true;
+    } on FirebaseException catch (e) {
+      if (e.code == 'not-found') return true;
+      if (_isPermissionDenied(e)) return false;
+      rethrow;
+    }
+  }
+
+  Future<void> unblockUser({required String myUid, required String targetUid}) {
+    return _blockedUsers(myUid).doc(targetUid).delete();
+  }
+
+  Future<void> dismissReportedUser({
+    required String reporterUid,
+    required String reportedUid,
+  }) {
+    return _users.doc(reporterUid).set(<String, dynamic>{
+      'reportedUsers.$reportedUid': FieldValue.delete(),
+      'dismissedReportedUsers.$reportedUid': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<List<UserActivityItem>> getLikedUsers(String uid) {
@@ -303,22 +377,30 @@ class DiscoverRepository {
     final QuerySnapshot<Map<String, dynamic>> snapshot = await _blockedUsers(
       uid,
     ).get();
-    final List<UserActivityItem> items = snapshot.docs.map((
-      QueryDocumentSnapshot<Map<String, dynamic>> doc,
-    ) {
-      final Map<String, dynamic> data = doc.data();
-      return UserActivityItem(
-        targetUserId: (data['targetUid'] as String?) ?? doc.id,
-        createdAt: _parseTimestamp(data['createdAt']),
-      );
-    }).toList(growable: false);
+    final List<UserActivityItem> items = snapshot.docs
+        .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+          final Map<String, dynamic> data = doc.data();
+          return UserActivityItem(
+            targetUserId: (data['targetUid'] as String?) ?? doc.id,
+            createdAt: _parseTimestamp(data['createdAt']),
+          );
+        })
+        .toList(growable: false);
     _sortByCreatedAtDesc(items);
     return items;
   }
 
   Future<List<UserActivityItem>> getReportedUsers(String uid) async {
+    final DocumentSnapshot<Map<String, dynamic>> userDoc = await _users
+        .doc(uid)
+        .get();
+    final Map<String, dynamic>? userData = userDoc.data();
+    final Set<String> dismissedReportedUsers = _parseDismissedReportedUsers(
+      userData?['dismissedReportedUsers'],
+    );
+
     final List<UserActivityItem> combined = <UserActivityItem>[
-      ...await _getReportedUsersFromProfile(uid),
+      ..._getReportedUsersFromProfileMap(userData?['reportedUsers']),
     ];
 
     try {
@@ -346,7 +428,13 @@ class DiscoverRepository {
       // history still keeps this feature usable.
     }
 
-    return _mergeUniqueActivityItems(combined);
+    final List<UserActivityItem> merged = _mergeUniqueActivityItems(combined);
+    return merged
+        .where(
+          (UserActivityItem item) =>
+              !dismissedReportedUsers.contains(item.targetUserId),
+        )
+        .toList(growable: false);
   }
 
   Future<Set<String>> _getSwipedUserIds(String uid) async {
@@ -381,6 +469,29 @@ class DiscoverRepository {
     }
   }
 
+  Future<Set<String>> _getReportedUserIds(String uid) async {
+    try {
+      final DocumentSnapshot<Map<String, dynamic>> doc = await _users
+          .doc(uid)
+          .get();
+      final Map<String, dynamic>? data = doc.data();
+      final dynamic rawReportedUsers = data?['reportedUsers'];
+      if (rawReportedUsers is! Map) {
+        return <String>{};
+      }
+
+      return rawReportedUsers.keys
+          .map((dynamic key) => key.toString())
+          .where((String id) => id.trim().isNotEmpty)
+          .toSet();
+    } on FirebaseException catch (e) {
+      if (_isPermissionDenied(e)) {
+        return <String>{};
+      }
+      rethrow;
+    }
+  }
+
   Future<List<UserActivityItem>> _getSwipeUsersByAction({
     required String uid,
     required String action,
@@ -388,15 +499,15 @@ class DiscoverRepository {
     final QuerySnapshot<Map<String, dynamic>> snapshot = await _swipeActions(
       uid,
     ).where('action', isEqualTo: action).get();
-    final List<UserActivityItem> items = snapshot.docs.map((
-      QueryDocumentSnapshot<Map<String, dynamic>> doc,
-    ) {
-      final Map<String, dynamic> data = doc.data();
-      return UserActivityItem(
-        targetUserId: (data['targetUserId'] as String?) ?? doc.id,
-        createdAt: _parseTimestamp(data['createdAt']),
-      );
-    }).toList(growable: false);
+    final List<UserActivityItem> items = snapshot.docs
+        .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+          final Map<String, dynamic> data = doc.data();
+          return UserActivityItem(
+            targetUserId: (data['targetUserId'] as String?) ?? doc.id,
+            createdAt: _parseTimestamp(data['createdAt']),
+          );
+        })
+        .toList(growable: false);
     _sortByCreatedAtDesc(items);
     return items;
   }
@@ -453,10 +564,9 @@ class DiscoverRepository {
     });
   }
 
-  Future<List<UserActivityItem>> _getReportedUsersFromProfile(String uid) async {
-    final DocumentSnapshot<Map<String, dynamic>> doc = await _users.doc(uid).get();
-    final Map<String, dynamic>? data = doc.data();
-    final dynamic rawReportedUsers = data?['reportedUsers'];
+  List<UserActivityItem> _getReportedUsersFromProfileMap(
+    dynamic rawReportedUsers,
+  ) {
     if (rawReportedUsers is! Map) {
       return const <UserActivityItem>[];
     }
@@ -486,6 +596,23 @@ class DiscoverRepository {
     return items;
   }
 
+  Set<String> _parseDismissedReportedUsers(dynamic rawDismissedUsers) {
+    if (rawDismissedUsers is! Map) {
+      return <String>{};
+    }
+
+    final Set<String> dismissed = <String>{};
+    rawDismissedUsers.forEach((dynamic key, dynamic value) {
+      if (value == true) {
+        final String uid = key?.toString() ?? '';
+        if (uid.isNotEmpty) {
+          dismissed.add(uid);
+        }
+      }
+    });
+    return dismissed;
+  }
+
   List<UserActivityItem> _mergeUniqueActivityItems(List<UserActivityItem> raw) {
     final Map<String, UserActivityItem> merged = <String, UserActivityItem>{};
 
@@ -507,7 +634,9 @@ class DiscoverRepository {
         merged[item.targetUserId] = UserActivityItem(
           targetUserId: item.targetUserId,
           createdAt: item.createdAt,
-          reason: item.reason?.isNotEmpty == true ? item.reason : existing.reason,
+          reason: item.reason?.isNotEmpty == true
+              ? item.reason
+              : existing.reason,
         );
         continue;
       }
@@ -529,6 +658,15 @@ class DiscoverRepository {
 
   bool _isPermissionDenied(FirebaseException exception) {
     return exception.code == 'permission-denied';
+  }
+
+  bool _isDemoUserUid(String uid) {
+    return uid.startsWith('demo_boy_') || uid.startsWith('demo_girl_');
+  }
+
+  String _buildMatchId(String uidA, String uidB) {
+    final List<String> users = <String>[uidA, uidB]..sort();
+    return '${users[0]}_${users[1]}';
   }
 }
 

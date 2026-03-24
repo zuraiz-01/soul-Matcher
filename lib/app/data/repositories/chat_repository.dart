@@ -8,6 +8,15 @@ class ChatRepository {
   CollectionReference<Map<String, dynamic>> get _matches =>
       _firestore.collection('matches');
 
+  Future<MatchModel?> getMatchById(String matchId) async {
+    final DocumentSnapshot<Map<String, dynamic>> snapshot = await _matches
+        .doc(matchId)
+        .get();
+    final Map<String, dynamic>? data = snapshot.data();
+    if (data == null) return null;
+    return MatchModel.fromMap(data, snapshot.id);
+  }
+
   Stream<List<ChatMessage>> streamMessages(String matchId) {
     return _matches
         .doc(matchId)
@@ -24,27 +33,26 @@ class ChatRepository {
   }
 
   Stream<List<MatchModel>> streamMatches(String uid) {
-    return _matches
-        .where('users', arrayContains: uid)
-        .snapshots()
-        .map((QuerySnapshot<Map<String, dynamic>> query) {
-          final List<MatchModel> matches = query.docs.map((
-            QueryDocumentSnapshot<Map<String, dynamic>> doc,
-          ) {
-            return MatchModel.fromMap(doc.data(), doc.id);
-          }).toList();
+    return _matches.where('users', arrayContains: uid).snapshots().map((
+      QuerySnapshot<Map<String, dynamic>> query,
+    ) {
+      final List<MatchModel> matches = query.docs.map((
+        QueryDocumentSnapshot<Map<String, dynamic>> doc,
+      ) {
+        return MatchModel.fromMap(doc.data(), doc.id);
+      }).toList();
 
-          // Keep sorting client-side to avoid requiring a composite Firestore
-          // index for arrayContains + orderBy queries.
-          matches.sort((MatchModel a, MatchModel b) {
-            final DateTime aTime =
-                a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final DateTime bTime =
-                b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-            return bTime.compareTo(aTime);
-          });
-          return matches;
-        });
+      // Keep sorting client-side to avoid requiring a composite Firestore
+      // index for arrayContains + orderBy queries.
+      matches.sort((MatchModel a, MatchModel b) {
+        final DateTime aTime =
+            a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final DateTime bTime =
+            b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime);
+      });
+      return matches;
+    });
   }
 
   Future<void> sendMessage({
@@ -60,6 +68,7 @@ class ChatRepository {
     final DocumentReference<Map<String, dynamic>> messageRef = matchRef
         .collection('messages')
         .doc();
+    final List<String> users = <String>[senderId, receiverId]..sort();
 
     await _firestore.runTransaction((Transaction transaction) async {
       final DocumentSnapshot<Map<String, dynamic>> snapshot = await transaction
@@ -81,6 +90,8 @@ class ChatRepository {
       });
 
       transaction.set(matchRef, <String, dynamic>{
+        'users': users,
+        'createdAt': current['createdAt'] ?? FieldValue.serverTimestamp(),
         'lastMessage': text.trim().isEmpty ? '[image]' : text.trim(),
         'lastMessageAt': FieldValue.serverTimestamp(),
         'unreadCount': <String, int>{

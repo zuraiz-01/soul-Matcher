@@ -23,7 +23,20 @@ class ChatPage extends GetView<ChatController> {
               child: _ChatAvatarImage(photoUrl: controller.otherUserPhoto),
             ),
             const SizedBox(width: 10),
-            Text(controller.otherUserName),
+            Expanded(
+              child: InkWell(
+                onTap: controller.openOtherUserProfile,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    controller.otherUserName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -38,12 +51,20 @@ class ChatPage extends GetView<ChatController> {
                       controller.messages.isEmpty) {
                     return const AppLoader();
                   }
+                  final bool showTyping =
+                      controller.isDemoChat &&
+                      controller.isGeneratingDemoReply.value;
                   return ListView.builder(
                     reverse: true,
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-                    itemCount: controller.messages.length,
+                    itemCount:
+                        controller.messages.length + (showTyping ? 1 : 0),
                     itemBuilder: (_, int index) {
-                      final message = controller.messages[index];
+                      if (showTyping && index == 0) {
+                        return const TypingBubble();
+                      }
+                      final int messageIndex = showTyping ? index - 1 : index;
+                      final message = controller.messages[messageIndex];
                       return ChatBubble(
                         message: message,
                         isMine: message.senderId == controller.myUid,

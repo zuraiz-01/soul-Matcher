@@ -69,15 +69,9 @@ class MatchesPage extends GetView<MatchesController> {
       itemCount: data.length,
       itemBuilder: (_, int index) {
         final MatchModel match = data[index];
-        final String otherId = match.otherUserId(controller.myUid);
-        final otherUser = controller.matchUsers[otherId];
         return MatchTile(
-          name: otherUser?.displayName.isNotEmpty == true
-              ? otherUser!.displayName
-              : 'Soul User',
-          photoUrl: otherUser?.photos.isNotEmpty == true
-              ? otherUser!.photos.first
-              : null,
+          name: controller.displayNameForMatch(match),
+          photoUrl: controller.photoForMatch(match),
           subtitle: match.lastMessage ?? '',
           unread: controller.unreadFor(match),
           lastMessageAt: match.lastMessageAt,

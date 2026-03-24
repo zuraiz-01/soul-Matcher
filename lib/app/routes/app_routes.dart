@@ -9,6 +9,7 @@ class AppRoutes {
   static const String home = '/home';
   static const String chat = '/chat';
   static const String settings = '/settings';
+  static const String userProfile = '/user-profile';
   static const String likedUsers = '/liked-users';
   static const String superLikedUsers = '/super-liked-users';
   static const String blockedUsers = '/blocked-users';

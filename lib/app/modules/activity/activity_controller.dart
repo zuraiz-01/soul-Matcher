@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:soul_matcher/app/data/models/app_user.dart';
 import 'package:soul_matcher/app/data/models/user_activity_item.dart';
 import 'package:soul_matcher/app/data/repositories/auth_repository.dart';
@@ -33,6 +34,7 @@ class ActivityController extends GetxController {
   final UserRepository _userRepository = Get.find<UserRepository>();
 
   final RxBool isLoading = true.obs;
+  final RxBool isRemoving = false.obs;
   final RxList<ActivityListEntry> entries = <ActivityListEntry>[].obs;
 
   String get title {
@@ -119,7 +121,7 @@ class ActivityController extends GetxController {
   }
 
   Future<ActivityListEntry> _toEntry(UserActivityItem item) async {
-    final AppUser? user = await _userRepository.getUser(item.targetUserId);
+    final AppUser? user = await _resolveUser(item.targetUserId);
     final String displayName = _displayName(user, item.targetUserId);
     final String subtitle = _subtitle(item);
 
@@ -132,11 +134,33 @@ class ActivityController extends GetxController {
     );
   }
 
+  Future<AppUser?> _resolveUser(String uid) async {
+    try {
+      final AppUser? firestoreUser = await _userRepository.getUser(uid);
+      if (firestoreUser != null &&
+          !_looksLikeDemoLabel(firestoreUser.displayName)) {
+        return firestoreUser;
+      }
+    } catch (_) {
+      // Ignore and fall back to demo profile lookup.
+    }
+    return _discoverRepository.getDemoUserById(uid);
+  }
+
   String _displayName(AppUser? user, String uid) {
     final String name = user?.displayName.trim() ?? '';
-    if (name.isNotEmpty) return name;
+    if (name.isNotEmpty && !_looksLikeDemoLabel(name)) return name;
+    final String demoName =
+        _discoverRepository.getDemoUserById(uid)?.displayName.trim() ?? '';
+    if (demoName.isNotEmpty) return demoName;
     if (uid.length <= 8) return 'User $uid';
     return 'User ${uid.substring(0, 8)}';
+  }
+
+  bool _looksLikeDemoLabel(String value) {
+    final String normalized = value.trim().toLowerCase();
+    return normalized.startsWith('demo_boy_') ||
+        normalized.startsWith('demo_girl_');
   }
 
   String _subtitle(UserActivityItem item) {
@@ -151,6 +175,86 @@ class ActivityController extends GetxController {
         final String reason = item.reason?.trim() ?? '';
         if (reason.isEmpty) return 'Report submitted.';
         return 'Reason: $reason';
+    }
+  }
+
+  String get removeActionLabel {
+    switch (type) {
+      case ActivityListType.liked:
+        return 'Remove from liked';
+      case ActivityListType.superLiked:
+        return 'Remove from super liked';
+      case ActivityListType.blocked:
+        return 'Unblock user';
+      case ActivityListType.reported:
+        return 'Remove from reported';
+    }
+  }
+
+  Future<void> removeEntry(ActivityListEntry entry) async {
+    final String? myUid = _authRepository.currentUser?.uid;
+    if (myUid == null || myUid.isEmpty || isRemoving.value) return;
+
+    isRemoving.value = true;
+    bool chatDeleted = true;
+    try {
+      switch (type) {
+        case ActivityListType.liked:
+        case ActivityListType.superLiked:
+          chatDeleted = await _discoverRepository
+              .removeSwipeActionAndDeleteConversation(
+                myUid: myUid,
+                targetUid: entry.uid,
+              );
+          break;
+        case ActivityListType.blocked:
+          await _discoverRepository.unblockUser(
+            myUid: myUid,
+            targetUid: entry.uid,
+          );
+          break;
+        case ActivityListType.reported:
+          await _discoverRepository.dismissReportedUser(
+            reporterUid: myUid,
+            reportedUid: entry.uid,
+          );
+          break;
+      }
+
+      entries.removeWhere((ActivityListEntry item) => item.uid == entry.uid);
+      Get.snackbar(
+        'Updated',
+        _removedMessage(entry.displayName, chatDeleted: chatDeleted),
+      );
+    } on FirebaseException catch (e) {
+      final String detail = e.message?.trim().isNotEmpty == true
+          ? e.message!.trim()
+          : e.code;
+      Get.snackbar('Unable to update', detail);
+    } catch (e) {
+      Get.snackbar('Unable to update', e.toString());
+    } finally {
+      isRemoving.value = false;
+    }
+  }
+
+  String _removedMessage(String displayName, {bool chatDeleted = true}) {
+    final String name = displayName.trim().isEmpty
+        ? 'User'
+        : displayName.trim();
+    switch (type) {
+      case ActivityListType.liked:
+        return chatDeleted
+            ? '$name removed from liked users and chat deleted.'
+            : '$name removed from liked users. Chat delete needs Firestore permission.';
+      case ActivityListType.superLiked:
+        return chatDeleted
+            ? '$name removed from super liked users and chat deleted.'
+            : '$name removed from super liked users. Chat delete needs Firestore permission.';
+      case ActivityListType.blocked:
+        return '$name has been unblocked.';
+      case ActivityListType.reported:
+        return '$name removed from reported users.';
     }
   }
 }

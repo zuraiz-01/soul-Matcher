@@ -39,7 +39,7 @@ class MatchesController extends GetxController {
     if (query.isEmpty) return matches;
     return matches.where((MatchModel match) {
       final String otherId = match.otherUserId(_myUid);
-      final String name = matchUsers[otherId]?.displayName.toLowerCase() ?? '';
+      final String name = _displayNameForUid(otherId).toLowerCase();
       return name.contains(query);
     }).toList();
   }
@@ -105,9 +105,21 @@ class MatchesController extends GetxController {
     final List<AppUser?> resolved = await Future.wait<AppUser?>(
       missing.map((String uid) async {
         try {
-          return await _userRepository.getUser(uid);
+          final AppUser? firestoreUser = await _userRepository.getUser(uid);
+          if (firestoreUser != null) {
+            if (_looksLikeDemoLabel(firestoreUser.displayName)) {
+              final AppUser? demoUser = _discoverRepository.getDemoUserById(
+                uid,
+              );
+              if (demoUser != null) {
+                return demoUser;
+              }
+            }
+            return firestoreUser;
+          }
+          return _discoverRepository.getDemoUserById(uid);
         } catch (_) {
-          return null;
+          return _discoverRepository.getDemoUserById(uid);
         }
       }),
     );
@@ -128,13 +140,14 @@ class MatchesController extends GetxController {
       );
       return;
     }
-    final AppUser? otherUser = matchUsers[otherId];
+    final AppUser? otherUser = _resolvedUserForUid(otherId);
+    final String resolvedName = _displayNameForUid(otherId);
     Get.toNamed(
       AppRoutes.chat,
       arguments: <String, dynamic>{
         'matchId': match.id,
         'otherUserId': otherId,
-        'otherUserName': otherUser?.displayName ?? 'Soul',
+        'otherUserName': resolvedName,
         'otherUserPhoto': otherUser?.photos.isNotEmpty == true
             ? otherUser!.photos.first
             : null,
@@ -142,22 +155,66 @@ class MatchesController extends GetxController {
     );
   }
 
+  String displayNameForMatch(MatchModel match) {
+    final String otherId = match.otherUserId(_myUid);
+    return _displayNameForUid(otherId);
+  }
+
+  String? photoForMatch(MatchModel match) {
+    final String otherId = match.otherUserId(_myUid);
+    final AppUser? otherUser = _resolvedUserForUid(otherId);
+    if (otherUser == null || otherUser.photos.isEmpty) {
+      return null;
+    }
+    return otherUser.photos.first;
+  }
+
+  AppUser? _resolvedUserForUid(String uid) {
+    return matchUsers[uid] ?? _discoverRepository.getDemoUserById(uid);
+  }
+
+  String _displayNameForUid(String uid) {
+    final AppUser? user = _resolvedUserForUid(uid);
+    final String displayName = user?.displayName.trim() ?? '';
+    if (displayName.isNotEmpty) {
+      return displayName;
+    }
+    return _fallbackName(uid);
+  }
+
+  String _fallbackName(String uid) {
+    final AppUser? demoUser = _discoverRepository.getDemoUserById(uid);
+    if (demoUser != null && demoUser.displayName.trim().isNotEmpty) {
+      return demoUser.displayName.trim();
+    }
+    if (uid.isEmpty) return 'Soul User';
+    if (uid.length <= 8) return 'User $uid';
+    return 'User ${uid.substring(0, 8)}';
+  }
+
+  bool _looksLikeDemoLabel(String value) {
+    final String normalized = value.trim().toLowerCase();
+    return normalized.startsWith('demo_boy_') ||
+        normalized.startsWith('demo_girl_');
+  }
+
   int unreadFor(MatchModel match) {
     return match.unreadCount[_myUid] ?? 0;
   }
 
   Future<void> _loadFallbackMatchesFromMutualLikes() async {
-    final List<String> mutualIds = await _discoverRepository.getMutualLikeUserIds(
-      _myUid,
-    );
-    final List<MatchModel> fallback = mutualIds.map((String otherUid) {
-      final List<String> users = <String>[_myUid, otherUid]..sort();
-      return MatchModel(
-        id: '${users[0]}_${users[1]}',
-        users: users,
-        unreadCount: <String, int>{_myUid: 0, otherUid: 0},
-      );
-    }).toList(growable: false);
+    final List<String> mutualIds = await _discoverRepository
+        .getMutualLikeUserIds(_myUid);
+    final List<MatchModel> fallback = mutualIds
+        .map((String otherUid) {
+          final List<String> users = <String>[_myUid, otherUid]..sort();
+          return MatchModel(
+            id: '${users[0]}_${users[1]}',
+            users: users,
+            unreadCount: <String, int>{_myUid: 0, otherUid: 0},
+          );
+        })
+        .toList(growable: false);
     matches.assignAll(fallback);
     await _resolveUsers(fallback);
   }

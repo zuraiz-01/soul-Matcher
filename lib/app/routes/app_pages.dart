@@ -15,6 +15,7 @@ import 'package:soul_matcher/app/modules/onboarding/onboarding_page.dart';
 import 'package:soul_matcher/app/modules/profile/profile_setup_page.dart';
 import 'package:soul_matcher/app/modules/settings/settings_page.dart';
 import 'package:soul_matcher/app/modules/splash/splash_page.dart';
+import 'package:soul_matcher/app/modules/user_profile/user_profile_page.dart';
 import 'package:soul_matcher/app/routes/app_routes.dart';
 
 class AppPages {
@@ -51,6 +52,10 @@ class AppPages {
       name: AppRoutes.chat,
       page: () => const ChatPage(),
       binding: ChatBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.userProfile,
+      page: () => const UserProfilePage(),
     ),
     GetPage<dynamic>(
       name: AppRoutes.settings,

@@ -43,6 +43,7 @@ class ActivityPage extends GetView<ActivityController> {
                   final entry = controller.entries[index];
                   return Card(
                     child: ListTile(
+                      onTap: () => _showEntryActionSheet(context, entry),
                       leading: CircleAvatar(
                         radius: 23,
                         backgroundColor: Theme.of(
@@ -62,6 +63,7 @@ class ActivityPage extends GetView<ActivityController> {
                               DateFormat('dd MMM').format(entry.createdAt!),
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
+                      onLongPress: () => _showEntryActionSheet(context, entry),
                     ),
                   );
                 },
@@ -70,6 +72,72 @@ class ActivityPage extends GetView<ActivityController> {
           }),
         ),
       ),
+    );
+  }
+
+  Future<void> _showEntryActionSheet(
+    BuildContext context,
+    ActivityListEntry entry,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: PremiumGlassCard(
+              child: Obx(
+                () => Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      entry.displayName,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      entry.subtitle,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 14),
+                    FilledButton.icon(
+                      onPressed: controller.isRemoving.value
+                          ? null
+                          : () async {
+                              Navigator.of(context).pop();
+                              await controller.removeEntry(entry);
+                            },
+                      icon: const Icon(Icons.remove_circle_outline_rounded),
+                      label: Text(controller.removeActionLabel),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
