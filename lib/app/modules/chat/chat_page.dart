@@ -19,12 +19,8 @@ class ChatPage extends GetView<ChatController> {
           children: <Widget>[
             CircleAvatar(
               radius: 18,
-              backgroundImage: controller.otherUserPhoto != null
-                  ? NetworkImage(controller.otherUserPhoto!)
-                  : null,
-              child: controller.otherUserPhoto == null
-                  ? const Icon(Icons.person)
-                  : null,
+              backgroundColor: Colors.white24,
+              child: _ChatAvatarImage(photoUrl: controller.otherUserPhoto),
             ),
             const SizedBox(width: 10),
             Text(controller.otherUserName),
@@ -90,6 +86,29 @@ class ChatPage extends GetView<ChatController> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ChatAvatarImage extends StatelessWidget {
+  const _ChatAvatarImage({required this.photoUrl});
+
+  final String? photoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    if (photoUrl == null || photoUrl!.trim().isEmpty) {
+      return const Icon(Icons.person);
+    }
+
+    return ClipOval(
+      child: Image.network(
+        photoUrl!,
+        width: 36,
+        height: 36,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const Icon(Icons.person),
       ),
     );
   }

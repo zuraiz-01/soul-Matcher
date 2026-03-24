@@ -1,12 +1,14 @@
 import 'package:get/get.dart';
+import 'package:soul_matcher/app/bindings/activity_binding.dart';
 import 'package:soul_matcher/app/bindings/auth_binding.dart';
 import 'package:soul_matcher/app/bindings/chat_binding.dart';
 import 'package:soul_matcher/app/bindings/home_binding.dart';
 import 'package:soul_matcher/app/bindings/onboarding_binding.dart';
 import 'package:soul_matcher/app/bindings/profile_binding.dart';
 import 'package:soul_matcher/app/bindings/settings_binding.dart';
+import 'package:soul_matcher/app/modules/activity/activity_controller.dart';
+import 'package:soul_matcher/app/modules/activity/activity_page.dart';
 import 'package:soul_matcher/app/modules/auth/auth_page.dart';
-import 'package:soul_matcher/app/modules/auth/phone_auth_page.dart';
 import 'package:soul_matcher/app/modules/chat/chat_page.dart';
 import 'package:soul_matcher/app/modules/home/home_page.dart';
 import 'package:soul_matcher/app/modules/onboarding/onboarding_page.dart';
@@ -23,11 +25,6 @@ class AppPages {
     GetPage<dynamic>(
       name: AppRoutes.auth,
       page: () => const AuthPage(),
-      binding: AuthBinding(),
-    ),
-    GetPage<dynamic>(
-      name: AppRoutes.phoneAuth,
-      page: () => const PhoneAuthPage(),
       binding: AuthBinding(),
     ),
     GetPage<dynamic>(
@@ -59,6 +56,26 @@ class AppPages {
       name: AppRoutes.settings,
       page: () => const SettingsPage(),
       binding: SettingsBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.likedUsers,
+      page: () => const ActivityPage(type: ActivityListType.liked),
+      binding: ActivityBinding(type: ActivityListType.liked),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.superLikedUsers,
+      page: () => const ActivityPage(type: ActivityListType.superLiked),
+      binding: ActivityBinding(type: ActivityListType.superLiked),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.blockedUsers,
+      page: () => const ActivityPage(type: ActivityListType.blocked),
+      binding: ActivityBinding(type: ActivityListType.blocked),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.reportedUsers,
+      page: () => const ActivityPage(type: ActivityListType.reported),
+      binding: ActivityBinding(type: ActivityListType.reported),
     ),
   ];
 }

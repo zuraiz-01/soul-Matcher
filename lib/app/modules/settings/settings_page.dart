@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:soul_matcher/app/modules/settings/settings_controller.dart';
+import 'package:soul_matcher/app/routes/app_routes.dart';
 import 'package:soul_matcher/app/widgets/premium_background.dart';
 
 class SettingsPage extends GetView<SettingsController> {
@@ -42,6 +43,38 @@ class SettingsPage extends GetView<SettingsController> {
                           ),
                         ],
                       ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.favorite_outline_rounded),
+                      title: const Text('Liked Users'),
+                      subtitle: const Text('Profiles you liked'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => Get.toNamed(AppRoutes.likedUsers),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.star_outline_rounded),
+                      title: const Text('Super Liked Users'),
+                      subtitle: const Text('Profiles you super liked'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => Get.toNamed(AppRoutes.superLikedUsers),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.block_outlined),
+                      title: const Text('Blocked Users'),
+                      subtitle: const Text('Users you blocked'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => Get.toNamed(AppRoutes.blockedUsers),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.flag_outlined),
+                      title: const Text('Reported Users'),
+                      subtitle: const Text('Users you reported'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => Get.toNamed(AppRoutes.reportedUsers),
                     ),
                   ],
                 ),

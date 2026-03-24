@@ -125,54 +125,279 @@ class DiscoverPage extends GetView<DiscoverController> {
   void _showMoreActionSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (_) => SafeArea(
-        child: Wrap(
-          children: <Widget>[
-            ListTile(
-              leading: const Icon(Icons.flag_outlined),
-              title: const Text('Report user'),
-              onTap: () async {
-                Navigator.of(context).pop();
-                await _showReportDialog(context);
-              },
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: _SheetCard(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const _BottomSheetHandle(),
+                Text(
+                  'Safety actions',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Take action on this profile.',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+                ),
+                const SizedBox(height: 12),
+                _SheetActionTile(
+                  icon: Icons.flag_outlined,
+                  iconColor: const Color(0xFFF6A23A),
+                  title: 'Report user',
+                  subtitle: 'Tell us why this profile looks suspicious',
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    await _showReportBottomSheet(context);
+                  },
+                ),
+                const SizedBox(height: 8),
+                _SheetActionTile(
+                  icon: Icons.block_outlined,
+                  iconColor: const Color(0xFFFF6B6B),
+                  title: 'Block user',
+                  subtitle: 'They will no longer appear in Discover',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    controller.blockCurrent();
+                  },
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.block_outlined),
-              title: const Text('Block user'),
-              onTap: () {
-                Navigator.of(context).pop();
-                controller.blockCurrent();
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Future<void> _showReportDialog(BuildContext context) async {
+  Future<void> _showReportBottomSheet(BuildContext context) async {
     final TextEditingController reasonController = TextEditingController();
-    await Get.defaultDialog(
-      title: 'Report user',
-      content: Column(
-        children: <Widget>[
-          const Text('Tell us what happened.'),
-          const SizedBox(height: 12),
-          TextField(
-            controller: reasonController,
-            maxLines: 3,
-            decoration: const InputDecoration(hintText: 'Reason'),
-          ),
-        ],
+    const List<String> quickReasons = <String>[
+      'Fake profile',
+      'Spam behavior',
+      'Inappropriate content',
+      'Harassment',
+      'Scam attempt',
+    ];
+    String? selectedReason;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext modalContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setModalState) {
+          return SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                12,
+                0,
+                12,
+                MediaQuery.of(context).viewInsets.bottom + 12,
+              ),
+              child: _SheetCard(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const _BottomSheetHandle(),
+                    Text(
+                      'Report user',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'This report is anonymous. Help us understand what happened.',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: quickReasons.map((String reason) {
+                        final bool isSelected = selectedReason == reason;
+                        return ChoiceChip(
+                          label: Text(reason),
+                          selected: isSelected,
+                          onSelected: (bool selected) {
+                            setModalState(() {
+                              selectedReason = selected ? reason : null;
+                              if (selected &&
+                                  reasonController.text.trim().isEmpty) {
+                                reasonController.text = reason;
+                                reasonController.selection =
+                                    TextSelection.fromPosition(
+                                      TextPosition(
+                                        offset: reasonController.text.length,
+                                      ),
+                                    );
+                              }
+                            });
+                          },
+                        );
+                      }).toList(growable: false),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: reasonController,
+                      maxLines: 4,
+                      maxLength: 180,
+                      decoration: const InputDecoration(
+                        hintText: 'Write a short reason...',
+                        prefixIcon: Icon(Icons.edit_note_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.of(modalContext).pop(),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () async {
+                              final String reason = reasonController.text
+                                  .trim();
+                              if (reason.isEmpty) {
+                                Get.snackbar(
+                                  'Validation',
+                                  'Please add a reason before submitting.',
+                                );
+                                return;
+                              }
+                              Navigator.of(modalContext).pop();
+                              await controller.reportCurrent(reason);
+                            },
+                            child: const Text('Submit Report'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
-      textCancel: 'Cancel',
-      textConfirm: 'Submit',
-      onConfirm: () async {
-        final String reason = reasonController.text.trim();
-        if (reason.isEmpty) return;
-        Get.back();
-        await controller.reportCurrent(reason);
-      },
+    );
+    reasonController.dispose();
+  }
+}
+
+class _BottomSheetHandle extends StatelessWidget {
+  const _BottomSheetHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 42,
+        height: 5,
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white30,
+          borderRadius: BorderRadius.circular(99),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetCard extends StatelessWidget {
+  const _SheetCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF111827),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0x33FFFFFF)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _SheetActionTile extends StatelessWidget {
+  const _SheetActionTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.white.withValues(alpha: 0.04),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: iconColor.withValues(alpha: 0.16),
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(title, style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+          ],
+        ),
+      ),
     );
   }
 }

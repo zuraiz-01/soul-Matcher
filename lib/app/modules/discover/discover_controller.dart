@@ -18,6 +18,7 @@ class DiscoverController extends GetxController {
   final Rx<DiscoverFilter> filter = const DiscoverFilter().obs;
   final RxBool isLoading = false.obs;
   final RxBool isSwiping = false.obs;
+  int _candidateRequestSequence = 0;
 
   @override
   void onInit() {
@@ -38,18 +39,24 @@ class DiscoverController extends GetxController {
   Future<void> loadCandidates() async {
     final AppUser? me = currentUser.value;
     if (me == null) return;
+    final int requestId = ++_candidateRequestSequence;
+    final DiscoverFilter activeFilter = filter.value;
 
     isLoading.value = true;
     try {
       final List<AppUser> data = await _discoverRepository.getCandidates(
         currentUser: me,
-        filter: filter.value,
+        filter: activeFilter,
       );
+      if (requestId != _candidateRequestSequence) return;
       candidates.assignAll(data);
     } catch (e) {
+      if (requestId != _candidateRequestSequence) return;
       Get.snackbar('Discover error', e.toString());
     } finally {
-      isLoading.value = false;
+      if (requestId == _candidateRequestSequence) {
+        isLoading.value = false;
+      }
     }
   }
 
@@ -71,6 +78,9 @@ class DiscoverController extends GetxController {
     final AppUser? me = currentUser.value;
     if (me == null || candidates.isEmpty || isSwiping.value) return;
     final AppUser target = candidates.first;
+    final String targetName = target.displayName.isEmpty
+        ? 'this profile'
+        : target.displayName;
 
     isSwiping.value = true;
     try {
@@ -93,7 +103,16 @@ class DiscoverController extends GetxController {
             'It\'s a match',
             'You and ${target.displayName} liked each other.',
           );
+        } else {
+          Get.snackbar(
+            type == SwipeType.superLike ? 'Super liked' : 'Liked',
+            type == SwipeType.superLike
+                ? 'You super liked $targetName.'
+                : 'You liked $targetName.',
+          );
         }
+      } else {
+        Get.snackbar('Passed', 'You passed on $targetName.');
       }
       candidates.removeAt(0);
     } catch (e) {

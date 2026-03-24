@@ -26,8 +26,7 @@ class MatchTile extends StatelessWidget {
         onTap: onTap,
         leading: CircleAvatar(
           radius: 24,
-          backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
-          child: photoUrl == null ? const Icon(Icons.person) : null,
+          child: _MatchAvatarImage(photoUrl: photoUrl),
         ),
         title: Text(name),
         subtitle: Text(
@@ -64,6 +63,29 @@ class MatchTile extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MatchAvatarImage extends StatelessWidget {
+  const _MatchAvatarImage({required this.photoUrl});
+
+  final String? photoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    if (photoUrl == null || photoUrl!.trim().isEmpty) {
+      return const Icon(Icons.person);
+    }
+
+    return ClipOval(
+      child: Image.network(
+        photoUrl!,
+        width: 48,
+        height: 48,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const Icon(Icons.person),
       ),
     );
   }

@@ -39,35 +39,6 @@ class AuthRepository {
     return _auth.signInWithCredential(credential);
   }
 
-  Future<void> verifyPhoneNumber({
-    required String phoneNumber,
-    required PhoneCodeSent codeSent,
-    required PhoneVerificationCompleted verificationCompleted,
-    required PhoneVerificationFailed verificationFailed,
-    required PhoneCodeAutoRetrievalTimeout codeAutoRetrievalTimeout,
-    int? forceResendingToken,
-  }) {
-    return _auth.verifyPhoneNumber(
-      phoneNumber: phoneNumber,
-      codeSent: codeSent,
-      verificationCompleted: verificationCompleted,
-      verificationFailed: verificationFailed,
-      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
-      forceResendingToken: forceResendingToken,
-    );
-  }
-
-  Future<UserCredential> verifyOtp({
-    required String verificationId,
-    required String otpCode,
-  }) {
-    final PhoneAuthCredential credential = PhoneAuthProvider.credential(
-      verificationId: verificationId,
-      smsCode: otpCode,
-    );
-    return _auth.signInWithCredential(credential);
-  }
-
   Future<void> signOut() async {
     await Future.wait<void>(<Future<void>>[
       _auth.signOut(),

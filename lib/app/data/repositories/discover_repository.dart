@@ -3,6 +3,7 @@ import 'package:soul_matcher/app/core/constants/app_constants.dart';
 import 'package:soul_matcher/app/data/models/app_user.dart';
 import 'package:soul_matcher/app/data/models/match_model.dart';
 import 'package:soul_matcher/app/data/models/swipe_action.dart';
+import 'package:soul_matcher/app/data/models/user_activity_item.dart';
 
 class DiscoverFilter {
   const DiscoverFilter({
@@ -41,6 +42,10 @@ class DiscoverRepository {
       _firestore.collection('matches');
   CollectionReference<Map<String, dynamic>> get _reports =>
       _firestore.collection('reports');
+  CollectionReference<Map<String, dynamic>> _swipeActions(String uid) =>
+      _firestore.collection('swipes').doc(uid).collection('actions');
+  CollectionReference<Map<String, dynamic>> _blockedUsers(String uid) =>
+      _firestore.collection('blocks').doc(uid).collection('blocked');
 
   Future<List<AppUser>> getCandidates({
     required AppUser currentUser,
@@ -49,16 +54,24 @@ class DiscoverRepository {
     final Set<String> swiped = await _getSwipedUserIds(currentUser.uid);
     final Set<String> blocked = await _getBlockedUserIds(currentUser.uid);
 
-    final QuerySnapshot<Map<String, dynamic>> snapshot = await _users
-        .where('profileCompleted', isEqualTo: true)
-        .limit(AppConstants.discoverBatchSize * 2)
-        .get();
+    List<AppUser> firestoreUsers = const <AppUser>[];
+    try {
+      final QuerySnapshot<Map<String, dynamic>> snapshot = await _users
+          .where('profileCompleted', isEqualTo: true)
+          .limit(AppConstants.discoverBatchSize * 2)
+          .get();
 
-    final List<AppUser> firestoreUsers = snapshot.docs
-        .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) {
-          return AppUser.fromMap(doc.data(), doc.id);
-        })
-        .toList(growable: false);
+      firestoreUsers = snapshot.docs
+          .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+            return AppUser.fromMap(doc.data(), doc.id);
+          })
+          .toList(growable: false);
+    } on FirebaseException catch (e) {
+      if (!_isPermissionDenied(e)) rethrow;
+      // Fall back to local demo users when Firestore permissions are not yet
+      // deployed/configured for discover reads.
+      firestoreUsers = const <AppUser>[];
+    }
 
     final List<AppUser> combined = <AppUser>[...firestoreUsers, ..._demoUsers];
 
@@ -74,8 +87,16 @@ class DiscoverRepository {
           if (!ageValid) return false;
 
           if (filter.interestedIn != null &&
-              filter.interestedIn!.isNotEmpty &&
-              user.gender != filter.interestedIn) {
+              filter.interestedIn!.trim().isNotEmpty &&
+              !_isSameGender(user.gender, filter.interestedIn)) {
+            return false;
+          }
+
+          // Show profiles that are likely compatible with current user.
+          if (!_isPotentiallyInterestedInMe(
+            candidateInterestedIn: user.interestedIn,
+            myGender: currentUser.gender,
+          )) {
             return false;
           }
 
@@ -89,18 +110,57 @@ class DiscoverRepository {
         .toList(growable: false);
   }
 
+  bool _isPotentiallyInterestedInMe({
+    required String? candidateInterestedIn,
+    required String? myGender,
+  }) {
+    final String? normalizedCandidateInterest = _normalizeGender(
+      candidateInterestedIn,
+    );
+    final String? normalizedMyGender = _normalizeGender(myGender);
+
+    // If either side is missing/unknown, don't block the profile.
+    if (normalizedCandidateInterest == null || normalizedMyGender == null) {
+      return true;
+    }
+
+    return normalizedCandidateInterest == normalizedMyGender;
+  }
+
+  bool _isSameGender(String? a, String? b) {
+    final String? first = _normalizeGender(a);
+    final String? second = _normalizeGender(b);
+    return first != null && second != null && first == second;
+  }
+
+  String? _normalizeGender(String? value) {
+    if (value == null) return null;
+    final String cleaned = value.trim().toLowerCase();
+    if (cleaned.isEmpty) return null;
+
+    if (cleaned == 'man' || cleaned == 'male' || cleaned == 'boy') {
+      return 'man';
+    }
+    if (cleaned == 'woman' || cleaned == 'female' || cleaned == 'girl') {
+      return 'woman';
+    }
+    if (cleaned == 'non-binary' ||
+        cleaned == 'nonbinary' ||
+        cleaned == 'nb') {
+      return 'non-binary';
+    }
+    return cleaned;
+  }
+
   Future<void> swipe({required SwipeActionModel action}) {
-    return _firestore
-        .collection('swipes')
-        .doc(action.byUserId)
-        .collection('actions')
-        .doc(action.targetUserId)
-        .set(<String, dynamic>{
+    return _swipeActions(action.byUserId).doc(action.targetUserId).set(
+      <String, dynamic>{
           'byUserId': action.byUserId,
           'targetUserId': action.targetUserId,
           'action': action.firestoreValue,
           'createdAt': FieldValue.serverTimestamp(),
-        });
+      },
+    );
   }
 
   Future<bool> isMutualLike({
@@ -150,14 +210,22 @@ class DiscoverRepository {
   Stream<List<MatchModel>> streamMatches(String uid) {
     return _matches
         .where('users', arrayContains: uid)
-        .orderBy('lastMessageAt', descending: true)
         .snapshots()
         .map((QuerySnapshot<Map<String, dynamic>> query) {
-          return query.docs.map((
+          final List<MatchModel> matches = query.docs.map((
             QueryDocumentSnapshot<Map<String, dynamic>> doc,
           ) {
             return MatchModel.fromMap(doc.data(), doc.id);
           }).toList();
+
+          matches.sort((MatchModel a, MatchModel b) {
+            final DateTime aTime =
+                a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final DateTime bTime =
+                b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return bTime.compareTo(aTime);
+          });
+          return matches;
         });
   }
 
@@ -165,50 +233,302 @@ class DiscoverRepository {
     required String reporterUid,
     required String reportedUid,
     required String reason,
-  }) {
-    return _reports.add(<String, dynamic>{
+  }) async {
+    final String trimmedReason = reason.trim();
+
+    Future<void> saveToReporterProfileOnly() {
+      return _users.doc(reporterUid).set(<String, dynamic>{
+        'reportedUsers.$reportedUid': <String, dynamic>{
+          'reason': trimmedReason,
+          'createdAt': FieldValue.serverTimestamp(),
+        },
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    final WriteBatch batch = _firestore.batch();
+    final DocumentReference<Map<String, dynamic>> reportRef = _reports.doc();
+    final DocumentReference<Map<String, dynamic>> reporterRef = _users.doc(
+      reporterUid,
+    );
+
+    batch.set(reportRef, <String, dynamic>{
       'reporterUid': reporterUid,
       'reportedUid': reportedUid,
-      'reason': reason,
+      'reason': trimmedReason,
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    // Keep a per-user report history to make "Reported Users" page reliable
+    // even when top-level reports query permissions are restricted.
+    batch.set(reporterRef, <String, dynamic>{
+      'reportedUsers.$reportedUid': <String, dynamic>{
+        'reason': trimmedReason,
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    try {
+      await batch.commit();
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied') {
+        rethrow;
+      }
+      // Graceful fallback when reports collection access is restricted.
+      await saveToReporterProfileOnly();
+    }
   }
 
   Future<void> blockUser({
     required String myUid,
     required String targetUid,
   }) async {
-    await _firestore
-        .collection('blocks')
-        .doc(myUid)
-        .collection('blocked')
-        .doc(targetUid)
-        .set(<String, dynamic>{
+    await _blockedUsers(myUid).doc(targetUid).set(
+      <String, dynamic>{
           'targetUid': targetUid,
           'createdAt': FieldValue.serverTimestamp(),
-        });
+      },
+    );
+  }
+
+  Future<List<UserActivityItem>> getLikedUsers(String uid) {
+    return _getSwipeUsersByAction(uid: uid, action: 'like');
+  }
+
+  Future<List<UserActivityItem>> getSuperLikedUsers(String uid) {
+    return _getSwipeUsersByAction(uid: uid, action: 'super_like');
+  }
+
+  Future<List<UserActivityItem>> getBlockedUsers(String uid) async {
+    final QuerySnapshot<Map<String, dynamic>> snapshot = await _blockedUsers(
+      uid,
+    ).get();
+    final List<UserActivityItem> items = snapshot.docs.map((
+      QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    ) {
+      final Map<String, dynamic> data = doc.data();
+      return UserActivityItem(
+        targetUserId: (data['targetUid'] as String?) ?? doc.id,
+        createdAt: _parseTimestamp(data['createdAt']),
+      );
+    }).toList(growable: false);
+    _sortByCreatedAtDesc(items);
+    return items;
+  }
+
+  Future<List<UserActivityItem>> getReportedUsers(String uid) async {
+    final List<UserActivityItem> combined = <UserActivityItem>[
+      ...await _getReportedUsersFromProfile(uid),
+    ];
+
+    try {
+      final QuerySnapshot<Map<String, dynamic>> snapshot = await _reports
+          .where('reporterUid', isEqualTo: uid)
+          .get();
+
+      combined.addAll(
+        snapshot.docs
+            .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+              final Map<String, dynamic> data = doc.data();
+              return UserActivityItem(
+                targetUserId: (data['reportedUid'] as String?) ?? '',
+                reason: (data['reason'] as String?)?.trim(),
+                createdAt: _parseTimestamp(data['createdAt']),
+              );
+            })
+            .where((UserActivityItem item) => item.targetUserId.isNotEmpty),
+      );
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied') {
+        rethrow;
+      }
+      // If reports collection read is blocked by rules, profile-backed
+      // history still keeps this feature usable.
+    }
+
+    return _mergeUniqueActivityItems(combined);
   }
 
   Future<Set<String>> _getSwipedUserIds(String uid) async {
-    final QuerySnapshot<Map<String, dynamic>> snapshot = await _firestore
-        .collection('swipes')
-        .doc(uid)
-        .collection('actions')
-        .get();
-    return snapshot.docs
-        .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) => doc.id)
-        .toSet();
+    try {
+      final QuerySnapshot<Map<String, dynamic>> snapshot = await _swipeActions(
+        uid,
+      ).get();
+      return snapshot.docs
+          .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) => doc.id)
+          .toSet();
+    } on FirebaseException catch (e) {
+      if (_isPermissionDenied(e)) {
+        return <String>{};
+      }
+      rethrow;
+    }
   }
 
   Future<Set<String>> _getBlockedUserIds(String uid) async {
-    final QuerySnapshot<Map<String, dynamic>> snapshot = await _firestore
-        .collection('blocks')
-        .doc(uid)
-        .collection('blocked')
-        .get();
-    return snapshot.docs
-        .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) => doc.id)
-        .toSet();
+    try {
+      final QuerySnapshot<Map<String, dynamic>> snapshot = await _blockedUsers(
+        uid,
+      ).get();
+      return snapshot.docs
+          .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) => doc.id)
+          .toSet();
+    } on FirebaseException catch (e) {
+      if (_isPermissionDenied(e)) {
+        return <String>{};
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<UserActivityItem>> _getSwipeUsersByAction({
+    required String uid,
+    required String action,
+  }) async {
+    final QuerySnapshot<Map<String, dynamic>> snapshot = await _swipeActions(
+      uid,
+    ).where('action', isEqualTo: action).get();
+    final List<UserActivityItem> items = snapshot.docs.map((
+      QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    ) {
+      final Map<String, dynamic> data = doc.data();
+      return UserActivityItem(
+        targetUserId: (data['targetUserId'] as String?) ?? doc.id,
+        createdAt: _parseTimestamp(data['createdAt']),
+      );
+    }).toList(growable: false);
+    _sortByCreatedAtDesc(items);
+    return items;
+  }
+
+  Future<List<String>> getMutualLikeUserIds(String myUid) async {
+    try {
+      final QuerySnapshot<Map<String, dynamic>> snapshot = await _swipeActions(
+        myUid,
+      ).get();
+
+      final List<String> likedTargets = snapshot.docs
+          .where((QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+            final String action = (doc.data()['action'] as String?) ?? '';
+            return action == 'like' || action == 'super_like';
+          })
+          .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) => doc.id)
+          .toList(growable: false);
+
+      final List<String> mutual = <String>[];
+      for (final String targetUid in likedTargets) {
+        try {
+          final bool isMutual = await isMutualLike(
+            myUid: myUid,
+            targetUid: targetUid,
+          );
+          if (isMutual) {
+            mutual.add(targetUid);
+          }
+        } catch (_) {
+          // Skip broken/inaccessible records and continue.
+        }
+      }
+      return mutual;
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        return const <String>[];
+      }
+      rethrow;
+    }
+  }
+
+  DateTime? _parseTimestamp(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    return null;
+  }
+
+  void _sortByCreatedAtDesc(List<UserActivityItem> items) {
+    items.sort((UserActivityItem a, UserActivityItem b) {
+      final DateTime aTime =
+          a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final DateTime bTime =
+          b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bTime.compareTo(aTime);
+    });
+  }
+
+  Future<List<UserActivityItem>> _getReportedUsersFromProfile(String uid) async {
+    final DocumentSnapshot<Map<String, dynamic>> doc = await _users.doc(uid).get();
+    final Map<String, dynamic>? data = doc.data();
+    final dynamic rawReportedUsers = data?['reportedUsers'];
+    if (rawReportedUsers is! Map) {
+      return const <UserActivityItem>[];
+    }
+
+    final List<UserActivityItem> items = <UserActivityItem>[];
+    rawReportedUsers.forEach((dynamic key, dynamic value) {
+      final String targetUid = key?.toString() ?? '';
+      if (targetUid.isEmpty) return;
+
+      if (value is Map) {
+        final Map<String, dynamic> reportData = value.map(
+          (dynamic k, dynamic v) => MapEntry(k.toString(), v),
+        );
+        items.add(
+          UserActivityItem(
+            targetUserId: targetUid,
+            reason: (reportData['reason'] as String?)?.trim(),
+            createdAt: _parseTimestamp(reportData['createdAt']),
+          ),
+        );
+        return;
+      }
+
+      items.add(UserActivityItem(targetUserId: targetUid));
+    });
+    _sortByCreatedAtDesc(items);
+    return items;
+  }
+
+  List<UserActivityItem> _mergeUniqueActivityItems(List<UserActivityItem> raw) {
+    final Map<String, UserActivityItem> merged = <String, UserActivityItem>{};
+
+    for (final UserActivityItem item in raw) {
+      if (item.targetUserId.isEmpty) continue;
+      final UserActivityItem? existing = merged[item.targetUserId];
+      if (existing == null) {
+        merged[item.targetUserId] = item;
+        continue;
+      }
+
+      final DateTime existingTime =
+          existing.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final DateTime incomingTime =
+          item.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bool pickIncoming = incomingTime.isAfter(existingTime);
+
+      if (pickIncoming) {
+        merged[item.targetUserId] = UserActivityItem(
+          targetUserId: item.targetUserId,
+          createdAt: item.createdAt,
+          reason: item.reason?.isNotEmpty == true ? item.reason : existing.reason,
+        );
+        continue;
+      }
+
+      if ((existing.reason == null || existing.reason!.isEmpty) &&
+          (item.reason?.isNotEmpty == true)) {
+        merged[item.targetUserId] = UserActivityItem(
+          targetUserId: existing.targetUserId,
+          createdAt: existing.createdAt,
+          reason: item.reason,
+        );
+      }
+    }
+
+    final List<UserActivityItem> items = merged.values.toList(growable: false);
+    _sortByCreatedAtDesc(items);
+    return items;
+  }
+
+  bool _isPermissionDenied(FirebaseException exception) {
+    return exception.code == 'permission-denied';
   }
 }
 

@@ -194,6 +194,7 @@ class OnboardingPage extends GetView<OnboardingController> {
                               return Row(
                                 children: <Widget>[
                                   Expanded(
+                                    flex: 15,
                                     child: OutlinedButton(
                                       onPressed: isBusy
                                           ? null
@@ -218,8 +219,9 @@ class OnboardingPage extends GetView<OnboardingController> {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  const Spacer(flex: 1),
                                   Expanded(
+                                    flex: 15,
                                     child: ElevatedButton(
                                       onPressed: isBusy
                                           ? null

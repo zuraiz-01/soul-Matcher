@@ -55,7 +55,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
           const SizedBox(height: 8),
           DropdownButtonFormField<String?>(
             initialValue: interestedIn,
-            hint: const Text('Interested in (optional)'),
+            hint: const Text('Show profiles (optional)'),
             items: <DropdownMenuItem<String?>>[
               const DropdownMenuItem<String?>(value: null, child: Text('Any')),
               ...AppConstants.genderOptions.map(
@@ -76,7 +76,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                   widget.initialFilter.copyWith(
                     minAge: ageRange.start.round(),
                     maxAge: ageRange.end.round(),
-                    interestedIn: interestedIn,
+                    interestedIn: interestedIn ?? '',
                   ),
                 );
                 Navigator.of(context).pop();

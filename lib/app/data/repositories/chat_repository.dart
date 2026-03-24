@@ -26,14 +26,24 @@ class ChatRepository {
   Stream<List<MatchModel>> streamMatches(String uid) {
     return _matches
         .where('users', arrayContains: uid)
-        .orderBy('lastMessageAt', descending: true)
         .snapshots()
         .map((QuerySnapshot<Map<String, dynamic>> query) {
-          return query.docs.map((
+          final List<MatchModel> matches = query.docs.map((
             QueryDocumentSnapshot<Map<String, dynamic>> doc,
           ) {
             return MatchModel.fromMap(doc.data(), doc.id);
           }).toList();
+
+          // Keep sorting client-side to avoid requiring a composite Firestore
+          // index for arrayContains + orderBy queries.
+          matches.sort((MatchModel a, MatchModel b) {
+            final DateTime aTime =
+                a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final DateTime bTime =
+                b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return bTime.compareTo(aTime);
+          });
+          return matches;
         });
   }
 

@@ -18,19 +18,41 @@ class MatchModel {
   final Map<String, int> unreadCount;
 
   factory MatchModel.fromMap(Map<String, dynamic> map, String docId) {
-    final Map<String, dynamic> rawUnread =
-        (map['unreadCount'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+    final dynamic rawUnreadData = map['unreadCount'];
+    final Map<String, dynamic> rawUnread = rawUnreadData is Map
+        ? rawUnreadData.map(
+            (dynamic key, dynamic value) =>
+                MapEntry(key.toString(), value),
+          )
+        : <String, dynamic>{};
+
+    final dynamic rawUsersData = map['users'];
+    final List<String> users = rawUsersData is List
+        ? rawUsersData.map((dynamic e) => e.toString()).toList()
+        : <String>[];
+
+    int parseUnread(dynamic value) {
+      if (value is num) return value.toInt();
+      if (value is String) {
+        return int.tryParse(value) ?? 0;
+      }
+      return 0;
+    }
+
+    DateTime? parseDate(dynamic value) {
+      if (value is Timestamp) return value.toDate();
+      if (value is DateTime) return value;
+      return null;
+    }
 
     return MatchModel(
       id: docId,
-      users: ((map['users'] as List<dynamic>?) ?? <dynamic>[])
-          .map((dynamic e) => e.toString())
-          .toList(),
-      createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
-      lastMessage: map['lastMessage'] as String?,
-      lastMessageAt: (map['lastMessageAt'] as Timestamp?)?.toDate(),
+      users: users,
+      createdAt: parseDate(map['createdAt']),
+      lastMessage: map['lastMessage']?.toString(),
+      lastMessageAt: parseDate(map['lastMessageAt']),
       unreadCount: rawUnread.map(
-        (String key, dynamic value) => MapEntry(key, (value as num).toInt()),
+        (String key, dynamic value) => MapEntry(key, parseUnread(value)),
       ),
     );
   }

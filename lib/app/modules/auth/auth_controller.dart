@@ -14,15 +14,11 @@ class AuthController extends GetxController {
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController =
       TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
-  final TextEditingController otpController = TextEditingController();
 
   final RxBool isLoginMode = true.obs;
   final RxBool isLoading = false.obs;
   final RxBool isPasswordObscured = true.obs;
   final RxBool isConfirmPasswordObscured = true.obs;
-  final RxnString verificationId = RxnString();
-  final RxnInt resendToken = RxnInt();
 
   void toggleMode() {
     isLoginMode.value = !isLoginMode.value;
@@ -116,83 +112,6 @@ class AuthController extends GetxController {
     }
   }
 
-  Future<void> sendOtp() async {
-    final String phone = phoneController.text.trim();
-    if (phone.isEmpty) {
-      Get.snackbar('Validation', 'Phone number is required.');
-      return;
-    }
-    if (!phone.startsWith('+')) {
-      Get.snackbar(
-        'Validation',
-        'Use international format, e.g. +923001234567',
-      );
-      return;
-    }
-
-    isLoading.value = true;
-    try {
-      await _authRepository.verifyPhoneNumber(
-        phoneNumber: phone,
-        forceResendingToken: resendToken.value,
-        codeSent: (String verId, int? token) {
-          verificationId.value = verId;
-          resendToken.value = token;
-          isLoading.value = false;
-          Get.snackbar('OTP sent', 'Verification code sent to your number.');
-        },
-        verificationCompleted: (PhoneAuthCredential credential) async {
-          final UserCredential userCredential = await FirebaseAuth.instance
-              .signInWithCredential(credential);
-          await _userRepository.createUserIfNotExists(userCredential.user!);
-          await _routeAfterAuth(userCredential.user!.uid);
-        },
-        verificationFailed: (FirebaseAuthException e) {
-          isLoading.value = false;
-          Get.snackbar('Phone auth failed', _friendlyAuthMessage(e));
-        },
-        codeAutoRetrievalTimeout: (String verId) {
-          verificationId.value = verId;
-          isLoading.value = false;
-        },
-      );
-    } on FirebaseAuthException catch (e) {
-      isLoading.value = false;
-      Get.snackbar('Phone auth failed', _friendlyAuthMessage(e));
-    } catch (e) {
-      isLoading.value = false;
-      Get.snackbar('Phone auth failed', e.toString());
-    } finally {
-      if (isLoading.value) {
-        isLoading.value = false;
-      }
-    }
-  }
-
-  Future<void> verifyOtp() async {
-    final String otp = otpController.text.trim();
-    final String? verId = verificationId.value;
-    if (otp.isEmpty || verId == null) {
-      Get.snackbar('Validation', 'Enter the OTP sent to your phone.');
-      return;
-    }
-    isLoading.value = true;
-    try {
-      final UserCredential credential = await _authRepository.verifyOtp(
-        verificationId: verId,
-        otpCode: otp,
-      );
-      await _userRepository.createUserIfNotExists(credential.user!);
-      await _routeAfterAuth(credential.user!.uid);
-    } on FirebaseAuthException catch (e) {
-      Get.snackbar('OTP verification failed', _friendlyAuthMessage(e));
-    } catch (e) {
-      Get.snackbar('OTP verification failed', e.toString());
-    } finally {
-      isLoading.value = false;
-    }
-  }
-
   String _friendlyAuthMessage(FirebaseAuthException e) {
     switch (e.code) {
       case 'invalid-email':
@@ -206,7 +125,7 @@ class AuthController extends GetxController {
       case 'email-already-in-use':
         return 'Is email par account already maujood hai.';
       case 'operation-not-allowed':
-        return 'Firebase provider enable nahi hai (Email/Google/Phone).';
+        return 'Firebase provider enable nahi hai (Email/Google).';
       case 'weak-password':
         return 'Password bohat weak hai.';
       case 'too-many-requests':
@@ -234,8 +153,6 @@ class AuthController extends GetxController {
     emailController.dispose();
     passwordController.dispose();
     confirmPasswordController.dispose();
-    phoneController.dispose();
-    otpController.dispose();
     super.onClose();
   }
 }

@@ -20,18 +20,13 @@ class DiscoverCard extends StatelessWidget {
         fit: StackFit.expand,
         children: <Widget>[
           if (photo != null)
-            Image.network(photo, fit: BoxFit.cover)
+            Image.network(
+              photo,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _buildPhotoFallback(),
+            )
           else
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[Color(0xFF1B2333), Color(0xFF3A1F2F)],
-                ),
-              ),
-              child: const Icon(Icons.person, size: 80, color: Colors.white70),
-            ),
+            _buildPhotoFallback(),
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -88,6 +83,19 @@ class DiscoverCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPhotoFallback() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xFF1B2333), Color(0xFF3A1F2F)],
+        ),
+      ),
+      child: const Icon(Icons.person, size: 80, color: Colors.white70),
     );
   }
 }

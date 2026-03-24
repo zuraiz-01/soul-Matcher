@@ -18,28 +18,38 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(icon, size: 48),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge,
-              textAlign: TextAlign.center,
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool hasBoundedHeight = constraints.hasBoundedHeight;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: hasBoundedHeight
+                ? BoxConstraints(minHeight: constraints.maxHeight)
+                : const BoxConstraints(),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(icon, size: 48),
+                  const SizedBox(height: 12),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(subtitle, textAlign: TextAlign.center),
+                  if (actionLabel != null && onAction != null) ...<Widget>[
+                    const SizedBox(height: 16),
+                    FilledButton(onPressed: onAction, child: Text(actionLabel!)),
+                  ],
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(subtitle, textAlign: TextAlign.center),
-            if (actionLabel != null && onAction != null) ...<Widget>[
-              const SizedBox(height: 16),
-              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
-            ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
