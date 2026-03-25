@@ -110,4 +110,52 @@ class ChatRepository {
       'unreadCount.$uid': 0,
     });
   }
+
+  Future<bool> clearChat({
+    required String matchId,
+    required List<String> users,
+  }) async {
+    final DocumentReference<Map<String, dynamic>> matchRef = _matches.doc(
+      matchId,
+    );
+
+    try {
+      final DocumentSnapshot<Map<String, dynamic>> matchSnapshot = await matchRef
+          .get();
+      if (!matchSnapshot.exists) {
+        // Fallback/synthetic match item may have no Firestore doc yet.
+        return true;
+      }
+
+      while (true) {
+        final QuerySnapshot<Map<String, dynamic>> snapshot = await matchRef
+            .collection('messages')
+            .limit(200)
+            .get();
+        if (snapshot.docs.isEmpty) break;
+
+        final WriteBatch batch = _firestore.batch();
+        for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+            in snapshot.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      }
+
+      final Map<String, int> resetUnread = <String, int>{
+        for (final String uid in users) uid: 0,
+      };
+
+      await matchRef.update(<String, dynamic>{
+        'lastMessage': FieldValue.delete(),
+        'lastMessageAt': FieldValue.delete(),
+        'unreadCount': resetUnread,
+      });
+      return true;
+    } on FirebaseException catch (e) {
+      if (e.code == 'not-found') return true;
+      if (e.code == 'permission-denied') return false;
+      rethrow;
+    }
+  }
 }

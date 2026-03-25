@@ -246,11 +246,11 @@ class ActivityController extends GetxController {
       case ActivityListType.liked:
         return chatDeleted
             ? '$name removed from liked users and chat deleted.'
-            : '$name removed from liked users. Chat delete needs Firestore permission.';
+            : '$name removed from liked users.';
       case ActivityListType.superLiked:
         return chatDeleted
             ? '$name removed from super liked users and chat deleted.'
-            : '$name removed from super liked users. Chat delete needs Firestore permission.';
+            : '$name removed from super liked users.';
       case ActivityListType.blocked:
         return '$name has been unblocked.';
       case ActivityListType.reported:

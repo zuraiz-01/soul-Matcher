@@ -9,6 +9,7 @@ class MatchTile extends StatelessWidget {
     required this.unread,
     required this.lastMessageAt,
     required this.onTap,
+    this.onLongPress,
     super.key,
   });
 
@@ -18,12 +19,14 @@ class MatchTile extends StatelessWidget {
   final int unread;
   final DateTime? lastMessageAt;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: ListTile(
         onTap: onTap,
+        onLongPress: onLongPress,
         leading: CircleAvatar(
           radius: 24,
           child: _MatchAvatarImage(photoUrl: photoUrl),

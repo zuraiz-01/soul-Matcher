@@ -21,6 +21,7 @@ class MatchesController extends GetxController {
   final RxList<MatchModel> matches = <MatchModel>[].obs;
   final RxMap<String, AppUser> matchUsers = <String, AppUser>{}.obs;
   final RxBool isLoading = true.obs;
+  final RxString deletingMatchId = ''.obs;
   final RxString searchQuery = ''.obs;
   bool _permissionWarningShown = false;
 
@@ -200,6 +201,57 @@ class MatchesController extends GetxController {
 
   int unreadFor(MatchModel match) {
     return match.unreadCount[_myUid] ?? 0;
+  }
+
+  bool isDeletingMatch(String matchId) {
+    return deletingMatchId.value == matchId;
+  }
+
+  Future<void> clearChat(MatchModel match) async {
+    if (_myUid.isEmpty) return;
+    if (deletingMatchId.value.isNotEmpty) return;
+
+    deletingMatchId.value = match.id;
+    try {
+      final bool cleared = await _chatRepository.clearChat(
+        matchId: match.id,
+        users: match.users,
+      );
+      if (!cleared) {
+        Get.snackbar(
+          'Delete not allowed',
+          'Firestore permissions do not allow deleting this chat.',
+        );
+        return;
+      }
+
+      _applyLocalClear(match.id);
+      Get.snackbar('Chat cleared', 'All messages deleted successfully.');
+    } on FirebaseException catch (e) {
+      Get.snackbar('Delete failed', e.message ?? e.code);
+    } catch (_) {
+      Get.snackbar('Delete failed', 'Could not clear this chat.');
+    } finally {
+      deletingMatchId.value = '';
+    }
+  }
+
+  void _applyLocalClear(String matchId) {
+    final int index = matches.indexWhere((MatchModel item) => item.id == matchId);
+    if (index == -1) return;
+
+    final MatchModel current = matches[index];
+    final Map<String, int> resetUnread = <String, int>{
+      for (final String uid in current.users) uid: 0,
+    };
+    matches[index] = MatchModel(
+      id: current.id,
+      users: current.users,
+      createdAt: current.createdAt,
+      lastMessage: null,
+      lastMessageAt: null,
+      unreadCount: resetUnread,
+    );
   }
 
   Future<void> _loadFallbackMatchesFromMutualLikes() async {

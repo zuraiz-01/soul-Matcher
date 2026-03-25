@@ -7,6 +7,7 @@ import 'package:soul_matcher/app/modules/discover/discover_page.dart';
 import 'package:soul_matcher/app/modules/home/home_controller.dart';
 import 'package:soul_matcher/app/modules/matches/matches_page.dart';
 import 'package:soul_matcher/app/routes/app_routes.dart';
+import 'package:soul_matcher/app/widgets/admob_banner.dart';
 import 'package:soul_matcher/app/widgets/premium_background.dart';
 
 class HomePage extends GetView<HomeController> {
@@ -23,32 +24,38 @@ class HomePage extends GetView<HomeController> {
           index: controller.selectedIndex.value,
           children: tabs,
         ),
-        bottomNavigationBar: SafeArea(
-          minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: NavigationBar(
-              selectedIndex: controller.selectedIndex.value,
-              onDestinationSelected: controller.changeTab,
-              destinations: const <NavigationDestination>[
-                NavigationDestination(
-                  icon: Icon(Icons.explore_outlined),
-                  selectedIcon: Icon(Icons.explore),
-                  label: 'Discover',
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const AdMobBanner(margin: EdgeInsets.only(top: 6)),
+            SafeArea(
+              minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: NavigationBar(
+                  selectedIndex: controller.selectedIndex.value,
+                  onDestinationSelected: controller.changeTab,
+                  destinations: const <NavigationDestination>[
+                    NavigationDestination(
+                      icon: Icon(Icons.explore_outlined),
+                      selectedIcon: Icon(Icons.explore),
+                      label: 'Discover',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.favorite_outline_rounded),
+                      selectedIcon: Icon(Icons.favorite_rounded),
+                      label: 'Matches',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.person_outline_rounded),
+                      selectedIcon: Icon(Icons.person_rounded),
+                      label: 'Me',
+                    ),
+                  ],
                 ),
-                NavigationDestination(
-                  icon: Icon(Icons.favorite_outline_rounded),
-                  selectedIcon: Icon(Icons.favorite_rounded),
-                  label: 'Matches',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.person_outline_rounded),
-                  selectedIcon: Icon(Icons.person_rounded),
-                  label: 'Me',
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

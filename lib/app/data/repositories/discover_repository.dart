@@ -79,40 +79,47 @@ class DiscoverRepository {
 
     final List<AppUser> combined = <AppUser>[...firestoreUsers, ..._demoUsers];
 
-    return combined
-        .where((AppUser user) {
-          if (user.uid == currentUser.uid) return false;
-          if (swiped.contains(user.uid)) return false;
-          if (blocked.contains(user.uid)) return false;
-          if (reported.contains(user.uid)) return false;
-          if (user.age == null) return false;
+    final Iterable<AppUser> filtered = combined.where((AppUser user) {
+      if (user.uid == currentUser.uid) return false;
+      if (swiped.contains(user.uid)) return false;
+      if (blocked.contains(user.uid)) return false;
+      if (reported.contains(user.uid)) return false;
+      if (user.age == null) return false;
 
-          final bool ageValid =
-              user.age! >= filter.minAge && user.age! <= filter.maxAge;
-          if (!ageValid) return false;
+      final bool ageValid =
+          user.age! >= filter.minAge && user.age! <= filter.maxAge;
+      if (!ageValid) return false;
 
-          if (filter.interestedIn != null &&
-              filter.interestedIn!.trim().isNotEmpty &&
-              !_isSameGender(user.gender, filter.interestedIn)) {
-            return false;
-          }
+      if (filter.interestedIn != null &&
+          filter.interestedIn!.trim().isNotEmpty &&
+          !_isSameGender(user.gender, filter.interestedIn)) {
+        return false;
+      }
 
-          // Show profiles that are likely compatible with current user.
-          if (!_isPotentiallyInterestedInMe(
-            candidateInterestedIn: user.interestedIn,
-            myGender: currentUser.gender,
-          )) {
-            return false;
-          }
+      // Show profiles that are likely compatible with current user.
+      if (!_isPotentiallyInterestedInMe(
+        candidateInterestedIn: user.interestedIn,
+        myGender: currentUser.gender,
+      )) {
+        return false;
+      }
 
-          if (filter.searchText.trim().isNotEmpty) {
-            final String q = filter.searchText.trim().toLowerCase();
-            if (!user.displayName.toLowerCase().contains(q)) return false;
-          }
-          return true;
-        })
-        .take(AppConstants.discoverBatchSize)
-        .toList(growable: false);
+      if (filter.searchText.trim().isNotEmpty) {
+        final String q = filter.searchText.trim().toLowerCase();
+        if (!user.displayName.toLowerCase().contains(q)) return false;
+      }
+      return true;
+    });
+
+    final Map<String, AppUser> uniqueByUid = <String, AppUser>{};
+    for (final AppUser user in filtered) {
+      uniqueByUid.putIfAbsent(user.uid, () => user);
+      if (uniqueByUid.length >= AppConstants.discoverBatchSize) {
+        break;
+      }
+    }
+
+    return uniqueByUid.values.toList(growable: false);
   }
 
   AppUser? getDemoUserById(String uid) {
@@ -313,6 +320,23 @@ class DiscoverRepository {
     required String targetUid,
   }) async {
     await removeSwipeAction(myUid: myUid, targetUid: targetUid);
+    bool shouldTryDeleteChat = true;
+    try {
+      // A chat should only exist for mutual likes. If it is not mutual anymore,
+      // skip delete and treat the unlike action as completed successfully.
+      shouldTryDeleteChat = await isMutualLike(
+        myUid: myUid,
+        targetUid: targetUid,
+      );
+    } on FirebaseException catch (e) {
+      if (!_isPermissionDenied(e)) {
+        rethrow;
+      }
+      // If reverse-like visibility is restricted, continue with best-effort
+      // chat cleanup instead of failing the unlike action.
+      shouldTryDeleteChat = true;
+    }
+    if (!shouldTryDeleteChat) return true;
     return deleteMatchAndMessages(uidA: myUid, uidB: targetUid);
   }
 

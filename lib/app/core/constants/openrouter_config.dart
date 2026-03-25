@@ -10,7 +10,8 @@ class OpenRouterConfig {
   // NOTE: Move this to --dart-define for production apps.
   static const String apiKey = String.fromEnvironment(
     'OPENROUTER_API_KEY',
-    defaultValue: '',
+    defaultValue:
+        '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',
   );
 
   static bool get isConfigured => apiKey.trim().isNotEmpty;

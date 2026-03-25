@@ -97,25 +97,24 @@ class DiscoverController extends GetxController {
     required AppUser target,
     required SwipeType type,
   }) async {
-    final int index = candidates.indexWhere(
+    final bool exists = candidates.any(
       (AppUser user) => user.uid == target.uid,
     );
-    if (index == -1) return;
+    if (!exists) return;
 
     // Dismissible requires immediate removal from tree once dismissed.
-    candidates.removeAt(index);
+    candidates.removeWhere((AppUser user) => user.uid == target.uid);
 
     final bool didSwipe = await swipeOnUser(
       target,
       type: type,
       removeFromDiscover: false,
     );
-
-    // If Firestore action fails, restore the removed profile to avoid data loss.
-    if (!didSwipe &&
-        candidates.every((AppUser user) => user.uid != target.uid)) {
-      final int insertIndex = index.clamp(0, candidates.length);
-      candidates.insert(insertIndex, target);
+    if (!didSwipe) {
+      // Keep the dismissed card removed. Reinserting immediately can trigger
+      // "A dismissed Dismissible widget is still part of the tree".
+      // User can refresh if they want to retry.
+      return;
     }
   }
 

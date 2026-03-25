@@ -127,7 +127,7 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF111111),
+          foregroundColor: const Color(0xFF111111), 
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
