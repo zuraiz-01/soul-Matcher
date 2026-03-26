@@ -27,28 +27,29 @@ class HomePage extends GetView<HomeController> {
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const AdMobBanner(margin: EdgeInsets.only(top: 6)),
+            const AdMobBanner(margin: EdgeInsets.fromLTRB(0, 2, 0, 10)),
             SafeArea(
-              minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              minimum: const EdgeInsets.fromLTRB(10, 0, 10, 6),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(14),
                 child: NavigationBar(
+                  height: 62,
                   selectedIndex: controller.selectedIndex.value,
                   onDestinationSelected: controller.changeTab,
                   destinations: const <NavigationDestination>[
                     NavigationDestination(
-                      icon: Icon(Icons.explore_outlined),
-                      selectedIcon: Icon(Icons.explore),
+                      icon: Icon(Icons.explore_outlined, size: 20),
+                      selectedIcon: Icon(Icons.explore, size: 20),
                       label: 'Discover',
                     ),
                     NavigationDestination(
-                      icon: Icon(Icons.favorite_outline_rounded),
-                      selectedIcon: Icon(Icons.favorite_rounded),
+                      icon: Icon(Icons.favorite_outline_rounded, size: 20),
+                      selectedIcon: Icon(Icons.favorite_rounded, size: 20),
                       label: 'Matches',
                     ),
                     NavigationDestination(
-                      icon: Icon(Icons.person_outline_rounded),
-                      selectedIcon: Icon(Icons.person_rounded),
+                      icon: Icon(Icons.person_outline_rounded, size: 20),
+                      selectedIcon: Icon(Icons.person_rounded, size: 20),
                       label: 'Me',
                     ),
                   ],

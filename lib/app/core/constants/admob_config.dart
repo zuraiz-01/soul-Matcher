@@ -16,6 +16,10 @@ class AdMobConfig {
       'ca-app-pub-3940256099942544/6300978111';
   static const String _iosTestBannerAdUnitId =
       'ca-app-pub-3940256099942544/2934735716';
+  static const bool _forceTestAds = bool.fromEnvironment(
+    'FORCE_TEST_ADS',
+    defaultValue: true,
+  );
 
   static bool get isSupportedPlatform {
     if (kIsWeb) {
@@ -32,11 +36,17 @@ class AdMobConfig {
     }
 
     if (defaultTargetPlatform == TargetPlatform.android) {
-      return kDebugMode ? _androidTestBannerAdUnitId : androidBannerAdUnitId;
+      if (kDebugMode || _forceTestAds) {
+        return _androidTestBannerAdUnitId;
+      }
+      return androidBannerAdUnitId;
     }
 
     if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return kDebugMode ? _iosTestBannerAdUnitId : iosBannerAdUnitId;
+      if (kDebugMode || _forceTestAds) {
+        return _iosTestBannerAdUnitId;
+      }
+      return iosBannerAdUnitId;
     }
 
     return '';
