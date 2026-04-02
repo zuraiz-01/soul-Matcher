@@ -14,6 +14,15 @@ class UserRepository {
   CollectionReference<Map<String, dynamic>> get _users =>
       _firestore.collection('users');
 
+  String buildReferralCode(String uid) {
+    final String sanitized = uid.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    final String upper = sanitized.toUpperCase();
+    final String seed = upper.length >= 8
+        ? upper.substring(0, 8)
+        : upper.padRight(8, 'X');
+    return 'SOUL$seed';
+  }
+
   Future<void> createUserIfNotExists(User firebaseUser) async {
     final DocumentReference<Map<String, dynamic>> ref = _users.doc(
       firebaseUser.uid,
@@ -33,6 +42,13 @@ class UserRepository {
       'photos': <String>[],
       'onboardingCompleted': false,
       'profileCompleted': false,
+      'subscriptionPlan': 'free',
+      'referralCode': buildReferralCode(firebaseUser.uid),
+      'referredByUid': null,
+      'referredByCode': null,
+      'referralPoints': 0,
+      'totalReferralPointsEarned': 0,
+      'totalReferralPayoutPoints': 0,
       'fcmToken': null,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),

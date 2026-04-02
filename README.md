@@ -1,16 +1,40 @@
-# soul_matcher
+﻿# Soul Matcher
 
-A new Flutter project.
+Flutter dating app built with GetX + Firebase.
 
-## Getting Started
+## Prerequisites
 
-This project is a starting point for a Flutter application.
+- Flutter managed via FVM
+- Dart SDK comes from the selected Flutter version
 
-A few resources to get you started if this is your first Flutter project:
+## FVM Setup
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+1. Install FVM globally (one-time):
+   ```bash
+   dart pub global activate fvm
+   ```
+2. Install the pinned SDK for this project:
+   ```bash
+   fvm install
+   ```
+3. Use the pinned SDK in this folder:
+   ```bash
+   fvm use
+   ```
+4. Run app commands through FVM:
+   ```bash
+   fvm flutter pub get
+   fvm flutter run
+   ```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Project Flutter Version
+
+This project is pinned to Flutter `3.41.2` via `.fvmrc`.
+
+## Windows note
+If `fvm use` fails with error `1314` (symlink privilege), either enable Windows Developer Mode or run terminal as Administrator.
+Project can still run with:
+```bash
+fvm flutter pub get
+fvm flutter run
+```

@@ -52,6 +52,7 @@ class ChatPage extends GetView<ChatController> {
                     return const AppLoader();
                   }
                   final bool showTyping =
+                      controller.canSeeTypingIndicator &&
                       controller.isDemoChat &&
                       controller.isGeneratingDemoReply.value;
                   return ListView.builder(
@@ -79,6 +80,16 @@ class ChatPage extends GetView<ChatController> {
                   padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
                   child: Row(
                     children: <Widget>[
+                      IconButton(
+                        tooltip: 'Image message',
+                        onPressed: controller.onImageMessageTap,
+                        icon: const Icon(Icons.image_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Audio message',
+                        onPressed: controller.onAudioMessageTap,
+                        icon: const Icon(Icons.mic_none_rounded),
+                      ),
                       Expanded(
                         child: TextField(
                           controller: controller.messageController,
@@ -129,6 +140,8 @@ class _ChatAvatarImage extends StatelessWidget {
         width: 36,
         height: 36,
         fit: BoxFit.cover,
+        filterQuality: FilterQuality.low,
+        cacheWidth: 120,
         errorBuilder: (_, _, _) => const Icon(Icons.person),
       ),
     );

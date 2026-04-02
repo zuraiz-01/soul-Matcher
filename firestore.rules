@@ -45,6 +45,40 @@ service cloud.firestore {
       allow update, delete: if isOwner(uid);
     }
 
+    match /users/{uid}/dailyUsage/{dateKey} {
+      allow create, read, update, delete: if isOwner(uid);
+
+      match /matches/{matchId} {
+        allow create, read, update, delete: if isOwner(uid);
+      }
+    }
+
+    match /referral_rewards/{rewardId} {
+      allow create: if signedIn() &&
+        request.resource.data.referredUid == request.auth.uid;
+      allow read: if signedIn() &&
+        (
+          resource.data.referredUid == request.auth.uid ||
+          resource.data.referrerUid == request.auth.uid
+        );
+      allow update: if signedIn() &&
+        resource.data.referrerUid == request.auth.uid &&
+        resource.data.claimedByReferrer == false &&
+        request.resource.data.claimedByReferrer == true &&
+        request.resource.data.referrerUid == resource.data.referrerUid &&
+        request.resource.data.referredUid == resource.data.referredUid &&
+        request.resource.data.pointsForReferrer == resource.data.pointsForReferrer;
+      allow delete: if false;
+    }
+
+    match /mock_payout_requests/{requestId} {
+      allow create: if signedIn() &&
+        request.resource.data.uid == request.auth.uid;
+      allow get, list: if signedIn() &&
+        resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     match /swipes/{uid}/actions/{targetUid} {
       // Owner can fully manage their swipe actions.
       allow create, update, delete: if isOwner(uid);

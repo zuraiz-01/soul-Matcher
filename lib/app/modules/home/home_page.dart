@@ -6,6 +6,7 @@ import 'package:soul_matcher/app/data/repositories/user_repository.dart';
 import 'package:soul_matcher/app/modules/discover/discover_page.dart';
 import 'package:soul_matcher/app/modules/home/home_controller.dart';
 import 'package:soul_matcher/app/modules/matches/matches_page.dart';
+import 'package:soul_matcher/app/modules/settings/settings_page.dart';
 import 'package:soul_matcher/app/routes/app_routes.dart';
 import 'package:soul_matcher/app/widgets/admob_banner.dart';
 import 'package:soul_matcher/app/widgets/premium_background.dart';
@@ -15,7 +16,12 @@ class HomePage extends GetView<HomeController> {
 
   @override
   Widget build(BuildContext context) {
-    const List<Widget> tabs = <Widget>[DiscoverPage(), MatchesPage(), _MeTab()];
+    const List<Widget> tabs = <Widget>[
+      DiscoverPage(),
+      MatchesPage(),
+      _MeTab(),
+      SettingsPage(),
+    ];
 
     return Obx(
       () => Scaffold(
@@ -27,7 +33,8 @@ class HomePage extends GetView<HomeController> {
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const AdMobBanner(margin: EdgeInsets.fromLTRB(0, 2, 0, 10)),
+            if (controller.shouldShowAds)
+              const AdMobBanner(margin: EdgeInsets.fromLTRB(0, 2, 0, 10)),
             SafeArea(
               minimum: const EdgeInsets.fromLTRB(10, 0, 10, 6),
               child: ClipRRect(
@@ -51,6 +58,11 @@ class HomePage extends GetView<HomeController> {
                       icon: Icon(Icons.person_outline_rounded, size: 20),
                       selectedIcon: Icon(Icons.person_rounded, size: 20),
                       label: 'Me',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.settings_outlined, size: 20),
+                      selectedIcon: Icon(Icons.settings, size: 20),
+                      label: 'Settings',
                     ),
                   ],
                 ),
@@ -110,10 +122,12 @@ class _MeTab extends StatelessWidget {
               if (!snapshot.hasData || user == null) {
                 return const Center(child: CircularProgressIndicator());
               }
+
               final ThemeData theme = Theme.of(context);
               final String displayName = user.displayName.trim().isEmpty
                   ? 'Your Profile'
                   : user.displayName.trim();
+
               final List<_ProfileMetaItem> metaItems = <_ProfileMetaItem>[
                 if (user.age != null)
                   _ProfileMetaItem(
@@ -256,70 +270,12 @@ class _MeTab extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () => Get.toNamed(AppRoutes.profileEdit),
-                          icon: const Icon(Icons.edit_outlined),
-                          label: const Text('Edit Profile'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            try {
-                              await authRepository.signOut();
-                              Get.offAllNamed(AppRoutes.auth);
-                            } catch (e) {
-                              Get.snackbar('Logout failed', e.toString());
-                            }
-                          },
-                          icon: const Icon(Icons.logout_rounded),
-                          label: const Text('Logout'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  PremiumGlassCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          'Your Activity',
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 10),
-                        _MeActionTile(
-                          icon: Icons.favorite_outline_rounded,
-                          title: 'Liked Users',
-                          subtitle: 'Profiles you liked',
-                          onTap: () => Get.toNamed(AppRoutes.likedUsers),
-                        ),
-                        const SizedBox(height: 8),
-                        _MeActionTile(
-                          icon: Icons.star_outline_rounded,
-                          title: 'Super Liked Users',
-                          subtitle: 'Profiles you super liked',
-                          onTap: () => Get.toNamed(AppRoutes.superLikedUsers),
-                        ),
-                        const SizedBox(height: 8),
-                        _MeActionTile(
-                          icon: Icons.block_outlined,
-                          title: 'Blocked Users',
-                          subtitle: 'Users you blocked',
-                          onTap: () => Get.toNamed(AppRoutes.blockedUsers),
-                        ),
-                        const SizedBox(height: 8),
-                        _MeActionTile(
-                          icon: Icons.flag_outlined,
-                          title: 'Reported Users',
-                          subtitle: 'Users you reported',
-                          onTap: () => Get.toNamed(AppRoutes.reportedUsers),
-                        ),
-                      ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () => Get.toNamed(AppRoutes.profileEdit),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Edit Profile'),
                     ),
                   ),
                 ],
@@ -382,58 +338,6 @@ class _ProfileMetaChip extends StatelessWidget {
   }
 }
 
-class _MeActionTile extends StatelessWidget {
-  const _MeActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: Colors.white.withValues(alpha: 0.05),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        child: Row(
-          children: <Widget>[
-            Icon(icon, color: Colors.white70),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(title, style: Theme.of(context).textTheme.titleSmall),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: Colors.white70),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: Colors.white54),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _ProfileAvatarImage extends StatelessWidget {
   const _ProfileAvatarImage({required this.user});
 
@@ -454,6 +358,8 @@ class _ProfileAvatarImage extends StatelessWidget {
         width: 96,
         height: 96,
         fit: BoxFit.cover,
+        filterQuality: FilterQuality.low,
+        cacheWidth: 240,
         errorBuilder: (_, _, _) => Text(fallbackLabel),
       ),
     );

@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:soul_matcher/app/modules/discover/discover_controller.dart';
 import 'package:soul_matcher/app/modules/home/home_controller.dart';
 import 'package:soul_matcher/app/modules/matches/matches_controller.dart';
+import 'package:soul_matcher/app/modules/settings/settings_controller.dart';
 
 class HomeBinding extends Bindings {
   @override
@@ -14,6 +15,9 @@ class HomeBinding extends Bindings {
     }
     if (!Get.isRegistered<MatchesController>()) {
       Get.lazyPut<MatchesController>(() => MatchesController());
+    }
+    if (!Get.isRegistered<SettingsController>()) {
+      Get.lazyPut<SettingsController>(() => SettingsController());
     }
   }
 }

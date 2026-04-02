@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:soul_matcher/app/core/subscription/subscription_plan.dart';
 import 'package:soul_matcher/app/data/models/app_user.dart';
 import 'package:soul_matcher/app/data/models/chat_message.dart';
 import 'package:soul_matcher/app/data/repositories/auth_repository.dart';
@@ -10,6 +11,7 @@ import 'package:soul_matcher/app/data/repositories/discover_repository.dart';
 import 'package:soul_matcher/app/data/repositories/user_repository.dart';
 import 'package:soul_matcher/app/routes/app_routes.dart';
 import 'package:soul_matcher/app/services/openrouter_service.dart';
+import 'package:soul_matcher/app/services/subscription_service.dart';
 
 class ChatController extends GetxController {
   ChatController({
@@ -29,16 +31,21 @@ class ChatController extends GetxController {
   final UserRepository _userRepository = Get.find<UserRepository>();
   final DiscoverRepository _discoverRepository = Get.find<DiscoverRepository>();
   final OpenRouterService _openRouterService = Get.find<OpenRouterService>();
+  final SubscriptionService _subscriptionService =
+      Get.find<SubscriptionService>();
 
   final TextEditingController messageController = TextEditingController();
   final RxList<ChatMessage> messages = <ChatMessage>[].obs;
   final RxBool isLoading = true.obs;
   final RxBool isGeneratingDemoReply = false.obs;
+  final Rx<SubscriptionPlan> currentPlan = SubscriptionPlan.free.obs;
 
   StreamSubscription<List<ChatMessage>>? _subscription;
+  StreamSubscription<SubscriptionPlan>? _planSubscription;
 
   String get myUid => _authRepository.currentUser?.uid ?? '';
   bool get isDemoChat => _isDemoUserUid(otherUserId);
+  bool get canSeeTypingIndicator => currentPlan.value.canSeeTypingIndicator;
 
   Future<void> openOtherUserProfile() async {
     try {
@@ -68,6 +75,36 @@ class ChatController extends GetxController {
     }
   }
 
+  void onImageMessageTap() {
+    if (!currentPlan.value.canSendImages) {
+      Get.snackbar(
+        'Upgrade required',
+        'Image sharing Gold/Platinum plan mein available hai. Plan upgrade karein.',
+      );
+      return;
+    }
+
+    Get.snackbar(
+      'Coming soon',
+      'Image message sending feature jaldi available hogi.',
+    );
+  }
+
+  void onAudioMessageTap() {
+    if (!currentPlan.value.canSendAudio) {
+      Get.snackbar(
+        'Upgrade required',
+        'Audio messages sirf Platinum plan mein available hain. Plan upgrade karein.',
+      );
+      return;
+    }
+
+    Get.snackbar(
+      'Coming soon',
+      'Audio message sending feature jaldi available hogi.',
+    );
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -76,6 +113,12 @@ class ChatController extends GetxController {
       Get.snackbar('Chat error', 'Invalid chat session.');
       return;
     }
+
+    _planSubscription = _subscriptionService.watchCurrentPlan().listen((
+      SubscriptionPlan plan,
+    ) {
+      currentPlan.value = plan;
+    });
     _listenMessages();
   }
 
@@ -98,6 +141,17 @@ class ChatController extends GetxController {
   Future<void> sendMessage() async {
     final String text = messageController.text.trim();
     if (text.isEmpty) return;
+
+    final SubscriptionGateResult gate = await _subscriptionService
+        .reserveMessageQuota(matchId: matchId);
+    if (!gate.allowed) {
+      Get.snackbar(
+        'Message limit reached',
+        gate.message ?? 'Upgrade your plan to continue chatting.',
+      );
+      return;
+    }
+
     messageController.clear();
     try {
       await _chatRepository.sendMessage(
@@ -106,10 +160,12 @@ class ChatController extends GetxController {
         receiverId: otherUserId,
         text: text,
       );
+
       if (_isDemoUserUid(otherUserId)) {
         unawaited(_sendDemoAutoReply(userMessage: text));
       }
     } catch (e) {
+      await _subscriptionService.releaseMessageQuota(matchId: matchId);
       Get.snackbar('Send failed', e.toString());
     }
   }
@@ -157,6 +213,7 @@ class ChatController extends GetxController {
   @override
   void onClose() {
     _subscription?.cancel();
+    _planSubscription?.cancel();
     messageController.dispose();
     super.onClose();
   }

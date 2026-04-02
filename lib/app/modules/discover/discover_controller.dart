@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:soul_matcher/app/data/models/app_user.dart';
 import 'package:soul_matcher/app/data/models/match_model.dart';
@@ -9,12 +9,15 @@ import 'package:soul_matcher/app/data/repositories/chat_repository.dart';
 import 'package:soul_matcher/app/data/repositories/discover_repository.dart';
 import 'package:soul_matcher/app/data/repositories/user_repository.dart';
 import 'package:soul_matcher/app/routes/app_routes.dart';
+import 'package:soul_matcher/app/services/subscription_service.dart';
 
 class DiscoverController extends GetxController {
   final AuthRepository _authRepository = Get.find<AuthRepository>();
   final UserRepository _userRepository = Get.find<UserRepository>();
   final DiscoverRepository _discoverRepository = Get.find<DiscoverRepository>();
   final ChatRepository _chatRepository = Get.find<ChatRepository>();
+  final SubscriptionService _subscriptionService =
+      Get.find<SubscriptionService>();
 
   final TextEditingController searchController = TextEditingController();
 
@@ -23,6 +26,8 @@ class DiscoverController extends GetxController {
   final Rx<DiscoverFilter> filter = const DiscoverFilter().obs;
   final RxBool isLoading = false.obs;
   final RxBool isSwiping = false.obs;
+  final RxString _searchQuery = ''.obs;
+  Worker? _searchDebounceWorker;
   int _candidateRequestSequence = 0;
 
   String? get _signedInUid => _authRepository.currentUser?.uid;
@@ -30,6 +35,12 @@ class DiscoverController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _searchDebounceWorker = debounce<String>(_searchQuery, (
+      String query,
+    ) async {
+      filter.value = filter.value.copyWith(searchText: query);
+      await loadCandidates();
+    }, time: const Duration(milliseconds: 320));
     _loadCurrentUser();
   }
 
@@ -71,13 +82,13 @@ class DiscoverController extends GetxController {
   }
 
   Future<void> applyFilter(DiscoverFilter newFilter) async {
-    filter.value = newFilter;
+    final String currentSearch = searchController.text.trim();
+    filter.value = newFilter.copyWith(searchText: currentSearch);
     await loadCandidates();
   }
 
-  Future<void> onSearchChanged(String query) async {
-    filter.value = filter.value.copyWith(searchText: query);
-    await loadCandidates();
+  void onSearchChanged(String query) {
+    _searchQuery.value = query.trim();
   }
 
   Future<void> refreshCandidates() async {
@@ -93,29 +104,15 @@ class DiscoverController extends GetxController {
     await swipeOnUser(candidates.first, type: type);
   }
 
-  Future<void> dismissAndSwipe({
+  Future<bool> swipeFromDismiss({
     required AppUser target,
     required SwipeType type,
-  }) async {
-    final bool exists = candidates.any(
-      (AppUser user) => user.uid == target.uid,
-    );
-    if (!exists) return;
+  }) {
+    return swipeOnUser(target, type: type, removeFromDiscover: false);
+  }
 
-    // Dismissible requires immediate removal from tree once dismissed.
-    candidates.removeWhere((AppUser user) => user.uid == target.uid);
-
-    final bool didSwipe = await swipeOnUser(
-      target,
-      type: type,
-      removeFromDiscover: false,
-    );
-    if (!didSwipe) {
-      // Keep the dismissed card removed. Reinserting immediately can trigger
-      // "A dismissed Dismissible widget is still part of the tree".
-      // User can refresh if they want to retry.
-      return;
-    }
+  void removeCandidate(String uid) {
+    candidates.removeWhere((AppUser user) => user.uid == uid);
   }
 
   Future<void> reportCurrent(String reason) async {
@@ -166,11 +163,22 @@ class DiscoverController extends GetxController {
   }) async {
     final String? myUid = _signedInUid;
     if (myUid == null || isSwiping.value) return false;
+
+    final SubscriptionGateResult gate = await _subscriptionService
+        .reserveSwipeQuota(type);
+    if (!gate.allowed) {
+      if (showFeedback) {
+        Get.snackbar('Upgrade required', gate.message ?? 'Plan limit reached.');
+      }
+      return false;
+    }
+
     final String targetName = target.displayName.isEmpty
         ? 'this profile'
         : target.displayName;
 
     isSwiping.value = true;
+    bool shouldRollbackQuota = true;
     try {
       await _discoverRepository.swipe(
         action: SwipeActionModel(
@@ -179,6 +187,8 @@ class DiscoverController extends GetxController {
           type: type,
         ),
       );
+      // Primary swipe side-effect succeeded; quota should remain consumed.
+      shouldRollbackQuota = false;
 
       bool mutual = false;
       if (type == SwipeType.like || type == SwipeType.superLike) {
@@ -194,27 +204,26 @@ class DiscoverController extends GetxController {
               'You and ${target.displayName} liked each other.',
             );
           }
-        } else {
-          if (showFeedback) {
-            Get.snackbar(
-              type == SwipeType.superLike ? 'Super liked' : 'Liked',
-              type == SwipeType.superLike
-                  ? 'You super liked $targetName.'
-                  : 'You liked $targetName.',
-            );
-          }
+        } else if (showFeedback) {
+          Get.snackbar(
+            type == SwipeType.superLike ? 'Super liked' : 'Liked',
+            type == SwipeType.superLike
+                ? 'You super liked $targetName.'
+                : 'You liked $targetName.',
+          );
         }
-      } else {
-        if (showFeedback) {
-          Get.snackbar('Passed', 'You passed on $targetName.');
-        }
+      } else if (showFeedback) {
+        Get.snackbar('Passed', 'You passed on $targetName.');
       }
 
       if (removeFromDiscover) {
-        candidates.removeWhere((AppUser user) => user.uid == target.uid);
+        removeCandidate(target.uid);
       }
       return true;
     } catch (e) {
+      if (shouldRollbackQuota) {
+        await _subscriptionService.releaseSwipeQuota(type);
+      }
       if (showFeedback) {
         Get.snackbar('Swipe failed', e.toString());
       }
@@ -249,8 +258,6 @@ class DiscoverController extends GetxController {
       try {
         match = await _chatRepository.getMatchById(matchId);
       } on FirebaseException catch (e) {
-        // Reading a non-existing match doc can still fail in some rule
-        // configurations. If users are mutually liked, create/open match.
         if (e.code != 'permission-denied') rethrow;
       }
 
@@ -286,6 +293,7 @@ class DiscoverController extends GetxController {
 
   @override
   void onClose() {
+    _searchDebounceWorker?.dispose();
     searchController.dispose();
     super.onClose();
   }

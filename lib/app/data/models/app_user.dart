@@ -13,6 +13,13 @@ class AppUser {
     this.photos = const <String>[],
     this.onboardingCompleted = false,
     this.profileCompleted = false,
+    this.subscriptionPlan = 'free',
+    this.referralCode = '',
+    this.referredByUid,
+    this.referredByCode,
+    this.referralPoints = 0,
+    this.totalReferralPointsEarned = 0,
+    this.totalReferralPayoutPoints = 0,
     this.fcmToken,
     this.createdAt,
     this.updatedAt,
@@ -29,6 +36,13 @@ class AppUser {
   final List<String> photos;
   final bool onboardingCompleted;
   final bool profileCompleted;
+  final String subscriptionPlan;
+  final String referralCode;
+  final String? referredByUid;
+  final String? referredByCode;
+  final int referralPoints;
+  final int totalReferralPointsEarned;
+  final int totalReferralPayoutPoints;
   final String? fcmToken;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -53,6 +67,15 @@ class AppUser {
           .toList(),
       onboardingCompleted: map['onboardingCompleted'] as bool? ?? false,
       profileCompleted: map['profileCompleted'] as bool? ?? false,
+      subscriptionPlan: map['subscriptionPlan'] as String? ?? 'free',
+      referralCode: map['referralCode'] as String? ?? '',
+      referredByUid: map['referredByUid'] as String?,
+      referredByCode: map['referredByCode'] as String?,
+      referralPoints: (map['referralPoints'] as num?)?.toInt() ?? 0,
+      totalReferralPointsEarned:
+          (map['totalReferralPointsEarned'] as num?)?.toInt() ?? 0,
+      totalReferralPayoutPoints:
+          (map['totalReferralPayoutPoints'] as num?)?.toInt() ?? 0,
       fcmToken: map['fcmToken'] as String?,
       createdAt: parseTimestamp(map['createdAt']),
       updatedAt: parseTimestamp(map['updatedAt']),
@@ -71,6 +94,13 @@ class AppUser {
     'photos': photos,
     'onboardingCompleted': onboardingCompleted,
     'profileCompleted': profileCompleted,
+    'subscriptionPlan': subscriptionPlan,
+    'referralCode': referralCode,
+    'referredByUid': referredByUid,
+    'referredByCode': referredByCode,
+    'referralPoints': referralPoints,
+    'totalReferralPointsEarned': totalReferralPointsEarned,
+    'totalReferralPayoutPoints': totalReferralPayoutPoints,
     'fcmToken': fcmToken,
     'createdAt': createdAt == null ? null : Timestamp.fromDate(createdAt!),
     'updatedAt': updatedAt == null ? null : Timestamp.fromDate(updatedAt!),
@@ -88,6 +118,13 @@ class AppUser {
     List<String>? photos,
     bool? onboardingCompleted,
     bool? profileCompleted,
+    String? subscriptionPlan,
+    String? referralCode,
+    String? referredByUid,
+    String? referredByCode,
+    int? referralPoints,
+    int? totalReferralPointsEarned,
+    int? totalReferralPayoutPoints,
     String? fcmToken,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -104,6 +141,15 @@ class AppUser {
       photos: photos ?? this.photos,
       onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
       profileCompleted: profileCompleted ?? this.profileCompleted,
+      subscriptionPlan: subscriptionPlan ?? this.subscriptionPlan,
+      referralCode: referralCode ?? this.referralCode,
+      referredByUid: referredByUid ?? this.referredByUid,
+      referredByCode: referredByCode ?? this.referredByCode,
+      referralPoints: referralPoints ?? this.referralPoints,
+      totalReferralPointsEarned:
+          totalReferralPointsEarned ?? this.totalReferralPointsEarned,
+      totalReferralPayoutPoints:
+          totalReferralPayoutPoints ?? this.totalReferralPayoutPoints,
       fcmToken: fcmToken ?? this.fcmToken,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
